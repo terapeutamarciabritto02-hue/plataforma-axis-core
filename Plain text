@@ -1,0 +1,15 @@
+axis-core/
+│
+├── apps/
+│   ├── web/
+│   └── mobile/
+│
+├── backend/
+│
+├── database/
+│
+├── docs/
+│
+├── scripts/
+│
+└── deploy/
