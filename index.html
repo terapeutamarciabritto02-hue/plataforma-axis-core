@@ -1,1048 +1,414 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AXIS CORE™ — Plataforma Terapêutica Multidimensional</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Bebas+Neue&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXIS CORE™ — Sistema Operacional Terapêutico</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --black:#050508;--bg1:#090a10;--bg2:#0e0f1a;
+  --blue:#5b8dee;--blue2:#4a7fd4;--blueF:rgba(91,141,238,0.12);
+  --blueD:rgba(91,141,238,0.35);--blueG:rgba(91,141,238,0.06);
+  --white:rgba(240,244,255,0.92);--dim:rgba(240,244,255,0.45);
+  --faint:rgba(240,244,255,0.14);--border:rgba(91,141,238,0.15);
+  --border2:rgba(91,141,238,0.28);
+  --mono:'DM Mono',monospace;--serif:'Cormorant Garamond',Georgia,serif;--display:'Cinzel',serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--black);color:var(--white);font-family:var(--serif);overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg1);}
+::-webkit-scrollbar-thumb{background:var(--blueD);border-radius:2px;}
 
-  <style>
-    /* ─── RESET & TOKENS ─────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--blueG) 1px,transparent 1px),linear-gradient(90deg,var(--blueG) 1px,transparent 1px);background-size:56px 56px;pointer-events:none;z-index:0;}
 
-    :root {
-      --ink:        #0a0b0e;
-      --ink-2:      #0f1118;
-      --ink-3:      #161822;
-      --white:      #f0ece4;
-      --white-dim:  rgba(240,236,228,0.55);
-      --white-faint:rgba(240,236,228,0.18);
-      --white-ghost:rgba(240,236,228,0.07);
-      --gold:       #5b8dee;
-      --gold-dim:   rgba(91,141,238,0.35);
-      --gold-faint: rgba(91,141,238,0.12);
-      --mono: 'DM Mono', monospace;
-      --serif: 'Cormorant Garamond', serif;
-      --display: 'Bebas Neue', sans-serif;
-    }
+.glow{position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px);}
+.glow1{width:600px;height:600px;top:-200px;left:50%;transform:translateX(-50%);background:radial-gradient(circle,rgba(91,141,238,0.08),transparent 70%);}
+.glow2{width:400px;height:400px;bottom:10%;right:-100px;background:radial-gradient(circle,rgba(56,189,248,0.05),transparent 70%);}
 
-    html { scroll-behavior: smooth; font-size: 16px; }
+nav{position:fixed;top:0;left:0;right:0;z-index:100;height:64px;display:flex;align-items:center;padding:0 40px;background:rgba(5,5,8,0.75);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.nav-logo img{width:36px;height:36px;border-radius:50%;object-fit:cover;}
+.nav-logo-text{font-family:var(--display);font-size:14px;color:var(--white);letter-spacing:0.12em;}
+.nav-logo-text span{color:var(--blue);}
+.nav-links{display:flex;align-items:center;gap:32px;margin-left:auto;list-style:none;}
+.nav-links a{font-family:var(--mono);font-size:11px;letter-spacing:0.12em;color:var(--dim);text-decoration:none;transition:color 0.2s;}
+.nav-links a:hover{color:var(--white);}
+.nav-cta{margin-left:32px;padding:8px 20px;background:var(--blueF);border:1px solid var(--border2);border-radius:6px;font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--blue);text-decoration:none;transition:all 0.2s;}
+.nav-cta:hover{background:rgba(91,141,238,0.2);border-color:var(--blue);}
 
-    body {
-      background: var(--ink);
-      color: var(--white);
-      font-family: var(--serif);
-      overflow-x: hidden;
-      cursor: none;
-    }
+#inicio{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:100px 24px 80px;position:relative;z-index:1;text-align:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;background:var(--blueF);border:1px solid var(--border);border-radius:99px;font-family:var(--mono);font-size:10px;letter-spacing:0.18em;color:var(--blue);margin-bottom:28px;animation:fadeUp 0.6s ease both;}
+.hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px var(--blue);animation:pulse 2s ease infinite;}
+.hero-logo-wrap{margin-bottom:28px;animation:fadeUp 0.6s 0.1s ease both;}
+.hero-logo{width:136px;height:136px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px rgba(91,141,238,0.2),0 0 40px rgba(91,141,238,0.15),0 0 80px rgba(91,141,238,0.08);animation:logoFloat 6s ease-in-out infinite;}
+.hero-title{font-family:var(--display);font-size:clamp(44px,9vw,86px);font-weight:900;letter-spacing:0.06em;line-height:1;color:var(--white);margin-bottom:10px;animation:fadeUp 0.7s 0.15s ease both;}
+.hero-title span{color:var(--blue);}
+.hero-sub-line{font-family:var(--display);font-size:clamp(10px,1.6vw,14px);letter-spacing:0.22em;color:var(--blue);margin-bottom:22px;animation:fadeUp 0.7s 0.2s ease both;}
+.hero-desc{max-width:540px;margin:0 auto 40px;font-size:clamp(15px,2vw,18px);color:var(--dim);line-height:1.85;font-weight:300;animation:fadeUp 0.7s 0.25s ease both;}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;animation:fadeUp 0.7s 0.3s ease both;}
+.btn-p{padding:14px 34px;background:linear-gradient(135deg,var(--blue2),var(--blue));border:none;border-radius:8px;font-family:var(--mono);font-size:12px;letter-spacing:0.1em;color:#fff;cursor:pointer;text-decoration:none;transition:all 0.25s;box-shadow:0 4px 24px rgba(91,141,238,0.3);}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(91,141,238,0.4);}
+.btn-s{padding:14px 34px;background:transparent;border:1px solid var(--border2);border-radius:8px;font-family:var(--mono);font-size:12px;letter-spacing:0.1em;color:var(--dim);cursor:pointer;text-decoration:none;transition:all 0.25s;}
+.btn-s:hover{border-color:var(--blue);color:var(--white);background:var(--blueF);}
+.hero-scroll{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;animation:fadeUp 0.7s 0.5s ease both;}
+.scroll-line{width:1px;height:40px;background:linear-gradient(to bottom,var(--blue),transparent);animation:scrollPulse 2s ease infinite;}
+.scroll-txt{font-family:var(--mono);font-size:9px;letter-spacing:0.18em;color:var(--faint);}
 
-    /* ─── CUSTOM CURSOR ──────────────────────────────────── */
-    #cursor {
-      position: fixed; top: 0; left: 0; z-index: 9999;
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--gold);
-      pointer-events: none;
-      transform: translate(-50%,-50%);
-      transition: transform 0.1s ease, width 0.25s ease, height 0.25s ease, background 0.25s ease;
-      mix-blend-mode: difference;
-    }
-    #cursor-ring {
-      position: fixed; top: 0; left: 0; z-index: 9998;
-      width: 32px; height: 32px; border-radius: 50%;
-      border: 1px solid var(--gold-dim);
-      pointer-events: none;
-      transform: translate(-50%,-50%);
-      transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), width 0.35s ease, height 0.35s ease, border-color 0.3s ease;
-    }
-    body:has(a:hover) #cursor-ring,
-    body:has(button:hover) #cursor-ring { width: 52px; height: 52px; border-color: var(--gold); }
+.stats-bar{position:relative;z-index:1;display:flex;justify-content:center;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(9,10,16,0.85);padding:26px 0;}
+.stat{flex:1;max-width:200px;text-align:center;padding:0 28px;border-right:1px solid var(--border);}
+.stat:last-child{border-right:none;}
+.stat-v{font-family:var(--display);font-size:30px;color:var(--blue);line-height:1;margin-bottom:5px;}
+.stat-l{font-family:var(--mono);font-size:9px;letter-spacing:0.16em;color:var(--dim);}
 
-    /* ─── SCROLLBAR ──────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 2px; }
-    ::-webkit-scrollbar-track { background: var(--ink); }
-    ::-webkit-scrollbar-thumb { background: var(--gold-dim); }
+section{position:relative;z-index:1;padding:88px 24px;max-width:1100px;margin:0 auto;}
+.s-tag{font-family:var(--mono);font-size:10px;letter-spacing:0.2em;color:var(--blue);margin-bottom:10px;display:flex;align-items:center;gap:10px;}
+.s-tag::before{content:'';display:inline-block;width:24px;height:1px;background:var(--blue);}
+.s-title{font-family:var(--display);font-size:clamp(26px,4vw,42px);font-weight:700;letter-spacing:0.04em;color:var(--white);line-height:1.2;margin-bottom:14px;}
+.s-desc{font-size:16px;color:var(--dim);line-height:1.8;max-width:500px;font-weight:300;}
 
-    /* ─── NOISE OVERLAY ──────────────────────────────────── */
-    body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: 1000; pointer-events: none;
-      opacity: 0.025;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    }
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px;}
+.card{background:rgba(9,10,16,0.9);border:1px solid var(--border);border-radius:14px;padding:28px 22px;transition:all 0.3s;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(to right,transparent,var(--blue),transparent);opacity:0;transition:opacity 0.3s;}
+.card:hover{border-color:var(--border2);transform:translateY(-4px);box-shadow:0 16px 48px rgba(91,141,238,0.1);}
+.card:hover::before{opacity:1;}
+.card-glyph{font-size:28px;color:var(--blue);margin-bottom:14px;display:block;}
+.card-title{font-family:var(--display);font-size:16px;letter-spacing:0.05em;color:var(--white);margin-bottom:10px;}
+.card-desc{font-size:13px;color:var(--dim);line-height:1.7;margin-bottom:14px;}
+.card-feats{list-style:none;display:flex;flex-direction:column;gap:5px;}
+.card-feats li{font-family:var(--mono);font-size:10px;letter-spacing:0.05em;color:var(--faint);display:flex;align-items:center;gap:7px;}
+.card-feats li::before{content:'→';color:var(--blue);flex-shrink:0;}
+.card-tag{display:inline-block;margin-top:14px;padding:3px 10px;background:var(--blueF);border:1px solid var(--border);border-radius:99px;font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--blue);}
 
-    /* ─── NAV ────────────────────────────────────────────── */
-    nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 24px 48px;
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.4s, background 0.4s, padding 0.4s;
-    }
-    nav.scrolled {
-      border-color: var(--white-ghost);
-      background: rgba(10,11,14,0.92);
-      backdrop-filter: blur(20px);
-      padding: 16px 48px;
-    }
+.arch-wrap{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;}
+.arch-diag{position:relative;width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;}
+.ring{position:absolute;border-radius:50%;border:1px solid;animation:rotateSlow linear infinite;}
+.ring1{width:80%;height:80%;border-color:rgba(91,141,238,0.15);animation-duration:40s;}
+.ring2{width:58%;height:58%;border-color:rgba(91,141,238,0.2);border-style:dashed;animation-duration:25s;animation-direction:reverse;}
+.ring3{width:36%;height:36%;border-color:rgba(91,141,238,0.3);animation-duration:15s;}
+.arch-ctr{position:relative;z-index:2;width:78px;height:78px;border-radius:50%;background:radial-gradient(circle,rgba(91,141,238,0.25),rgba(91,141,238,0.05));border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(91,141,238,0.2);}
+.arch-ctr-txt{font-family:var(--display);font-size:11px;color:var(--blue);letter-spacing:0.1em;text-align:center;line-height:1.3;}
+.onode{position:absolute;width:46px;height:46px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;letter-spacing:0.06em;color:var(--dim);text-align:center;line-height:1.3;flex-direction:column;gap:2px;}
+.onode span{font-size:13px;}
+.arch-list{display:flex;flex-direction:column;gap:10px;}
+.a-item{display:flex;gap:12px;align-items:flex-start;padding:13px 15px;background:rgba(9,10,16,0.8);border:1px solid var(--border);border-radius:10px;transition:border-color 0.2s;}
+.a-item:hover{border-color:var(--border2);}
+.a-icon{width:34px;height:34px;flex-shrink:0;border-radius:8px;background:var(--blueF);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--blue);}
+.a-title{font-family:var(--display);font-size:13px;color:var(--white);margin-bottom:2px;}
+.a-desc{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.04em;line-height:1.5;}
 
-    .nav-logo {
-      display: flex; align-items: baseline; gap: 6px; text-decoration: none;
-    }
-    .nav-logo-axis {
-      font-family: var(--display);
-      font-size: 22px; letter-spacing: 0.15em;
-      color: var(--gold);
-    }
-    .nav-logo-core {
-      font-family: var(--mono);
-      font-size: 11px; color: var(--white-dim);
-      letter-spacing: 0.2em;
-    }
+.rm-grid{margin-top:48px;display:grid;grid-template-columns:repeat(4,1fr);gap:0;position:relative;}
+.rm-grid::before{content:'';position:absolute;top:27px;left:0;right:0;height:1px;background:linear-gradient(to right,transparent,var(--blue),var(--blue),transparent);opacity:0.3;}
+.rm-phase{padding:0 14px;padding-top:52px;position:relative;}
+.rm-dot{position:absolute;top:19px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;border:2px solid var(--blue);background:var(--black);z-index:2;}
+.rm-dot.active{background:var(--blue);box-shadow:0 0 12px var(--blue);}
+.rm-phase-label{font-family:var(--mono);font-size:9px;letter-spacing:0.16em;color:var(--blue);margin-bottom:7px;}
+.rm-phase-title{font-family:var(--display);font-size:14px;color:var(--white);margin-bottom:11px;}
+.rm-items{list-style:none;display:flex;flex-direction:column;gap:5px;}
+.rm-items li{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.03em;line-height:1.6;display:flex;align-items:flex-start;gap:6px;}
+.rm-items li.done{color:var(--blue);}
+.rm-items li::before{content:'·';color:var(--blue);flex-shrink:0;}
+.rm-items li.done::before{content:'✓';}
 
-    .nav-links {
-      display: flex; align-items: center; gap: 40px;
-      list-style: none;
-    }
-    .nav-links a {
-      font-family: var(--mono);
-      font-size: 11px; letter-spacing: 0.12em;
-      color: var(--white-dim);
-      text-decoration: none;
-      text-transform: uppercase;
-      transition: color 0.2s;
-    }
-    .nav-links a:hover { color: var(--white); }
+#entrar{max-width:1100px;text-align:center;}
+.cta-box{padding:64px 40px;border:1px solid var(--border);border-radius:20px;background:radial-gradient(ellipse at 50% 0%,rgba(91,141,238,0.08),transparent 70%);position:relative;overflow:hidden;}
+.cta-box::before{content:'';position:absolute;top:0;left:20%;right:20%;height:1px;background:linear-gradient(to right,transparent,var(--blue),transparent);}
+.cta-title{font-family:var(--display);font-size:clamp(22px,4vw,38px);font-weight:700;color:var(--white);margin-bottom:14px;letter-spacing:0.04em;}
+.cta-desc{font-size:16px;color:var(--dim);line-height:1.8;max-width:460px;margin:0 auto 34px;}
 
-    .nav-cta {
-      font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
-      text-transform: uppercase; text-decoration: none;
-      padding: 10px 24px;
-      border: 1px solid var(--gold-dim);
-      color: var(--gold);
-      transition: all 0.25s;
-      position: relative; overflow: hidden;
-    }
-    .nav-cta::before {
-      content: ''; position: absolute; inset: 0;
-      background: var(--gold); transform: scaleX(0); transform-origin: left;
-      transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
-      z-index: -1;
-    }
-    .nav-cta:hover { color: var(--ink); border-color: var(--gold); }
-    .nav-cta:hover::before { transform: scaleX(1); }
+footer{position:relative;z-index:1;border-top:1px solid var(--border);padding:36px 40px 24px;display:flex;justify-content:space-between;align-items:flex-start;gap:28px;flex-wrap:wrap;}
+.ft-brand{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.ft-brand img{width:30px;height:30px;border-radius:50%;object-fit:cover;}
+.ft-brand-name{font-family:var(--display);font-size:13px;color:var(--white);letter-spacing:0.1em;}
+.ft-reg{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:0.08em;line-height:1.8;}
+.ft-disc{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:0.07em;line-height:1.8;max-width:360px;text-align:right;}
+.ft-copy{width:100%;text-align:center;font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:0.1em;margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.04);}
 
-    /* ─── HERO ───────────────────────────────────────────── */
-    .hero {
-      min-height: 100vh;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      position: relative;
-      overflow: hidden;
-    }
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 8px var(--blue)}50%{opacity:0.4;box-shadow:0 0 3px var(--blue)}}
+@keyframes scrollPulse{0%,100%{opacity:0.3}50%{opacity:1}}
+@keyframes rotateSlow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
-    /* Vertical rule */
-    .hero::after {
-      content: '';
-      position: absolute;
-      top: 0; bottom: 0;
-      left: 50%; width: 1px;
-      background: linear-gradient(to bottom, transparent, var(--white-ghost) 20%, var(--white-ghost) 80%, transparent);
-      pointer-events: none;
-    }
+.reveal{opacity:0;transform:translateY(22px);transition:opacity 0.7s ease,transform 0.7s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+.d1{transition-delay:0.1s}.d2{transition-delay:0.2s}.d3{transition-delay:0.3s}
 
-    .hero-left {
-      display: flex; flex-direction: column; justify-content: flex-end;
-      padding: 0 64px 80px;
-      position: relative; z-index: 2;
-    }
-
-    .hero-eyebrow {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
-      text-transform: uppercase; color: var(--gold);
-      margin-bottom: 28px;
-      display: flex; align-items: center; gap: 12px;
-      opacity: 0; animation: fadeUp 0.8s 0.3s forwards;
-    }
-    .hero-eyebrow::before {
-      content: ''; width: 28px; height: 1px; background: var(--gold);
-    }
-
-    .hero-title {
-      font-family: var(--display);
-      font-size: clamp(72px, 9vw, 136px);
-      line-height: 0.9;
-      letter-spacing: -0.01em;
-      color: var(--white);
-      margin-bottom: 32px;
-      opacity: 0; animation: fadeUp 0.9s 0.5s forwards;
-    }
-    .hero-title em {
-      display: block;
-      font-style: normal;
-      color: var(--gold);
-      -webkit-text-stroke: 0px;
-    }
-
-    .hero-subtitle {
-      font-family: var(--serif);
-      font-size: 18px; font-weight: 300;
-      color: var(--white-dim); line-height: 1.75;
-      max-width: 380px; margin-bottom: 48px;
-      opacity: 0; animation: fadeUp 0.9s 0.7s forwards;
-    }
-
-    .hero-actions {
-      display: flex; align-items: center; gap: 28px;
-      opacity: 0; animation: fadeUp 0.9s 0.9s forwards;
-    }
-
-    .btn-primary {
-      font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em;
-      text-transform: uppercase; text-decoration: none;
-      padding: 14px 36px;
-      background: var(--gold); color: var(--ink);
-      font-weight: 400;
-      transition: all 0.25s;
-      position: relative; overflow: hidden;
-    }
-    .btn-primary:hover { background: var(--white); }
-
-    .btn-ghost {
-      font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em;
-      text-transform: uppercase; text-decoration: none;
-      color: var(--white-dim);
-      display: flex; align-items: center; gap: 8px;
-      transition: color 0.2s;
-    }
-    .btn-ghost:hover { color: var(--white); }
-    .btn-ghost svg { transition: transform 0.2s; }
-    .btn-ghost:hover svg { transform: translateX(4px); }
-
-    /* Hero right */
-    .hero-right {
-      display: flex; flex-direction: column; justify-content: center;
-      padding: 120px 64px 80px;
-      position: relative;
-    }
-
-    /* Circular diagram */
-    .diagram-wrap {
-      position: relative;
-      width: 320px; height: 320px;
-      margin: 0 auto 48px;
-      opacity: 0; animation: fadeIn 1.2s 1s forwards;
-    }
-    .diagram-wrap svg { width: 100%; height: 100%; }
-
-    .hero-stats {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 1px; background: var(--white-ghost);
-      border: 1px solid var(--white-ghost);
-      opacity: 0; animation: fadeUp 0.9s 1.1s forwards;
-    }
-    .stat-cell {
-      background: var(--ink); padding: 20px 22px;
-    }
-    .stat-value {
-      font-family: var(--display);
-      font-size: 38px; color: var(--gold); line-height: 1;
-      margin-bottom: 4px;
-    }
-    .stat-label {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.12em; color: var(--white-faint);
-      text-transform: uppercase;
-    }
-
-    /* ─── SECTION BASE ───────────────────────────────────── */
-    section { position: relative; overflow: hidden; }
-
-    .section-rule {
-      width: 100%; height: 1px;
-      background: linear-gradient(to right, transparent, var(--white-ghost) 30%, var(--white-ghost) 70%, transparent);
-    }
-
-    /* ─── MARQUEE ────────────────────────────────────────── */
-    .marquee-wrap {
-      background: var(--ink-2);
-      border-top: 1px solid var(--white-ghost);
-      border-bottom: 1px solid var(--white-ghost);
-      padding: 16px 0; overflow: hidden;
-    }
-    .marquee-track {
-      display: flex; gap: 0;
-      animation: marquee 24s linear infinite;
-      white-space: nowrap;
-    }
-    .marquee-item {
-      display: inline-flex; align-items: center; gap: 20px;
-      padding: 0 32px;
-      font-family: var(--mono); font-size: 11px;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--white-faint);
-    }
-    .marquee-dot {
-      width: 4px; height: 4px; border-radius: 50%;
-      background: var(--gold); opacity: 0.6; flex-shrink: 0;
-    }
-    @keyframes marquee {
-      from { transform: translateX(0); }
-      to   { transform: translateX(-50%); }
-    }
-
-    /* ─── FEATURES ───────────────────────────────────────── */
-    .features {
-      padding: 120px 48px;
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 80px;
-      max-width: 1200px; margin: 0 auto;
-    }
-
-    .features-label {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.2em; color: var(--gold);
-      text-transform: uppercase;
-      margin-bottom: 20px;
-    }
-    .features-heading {
-      font-family: var(--serif); font-size: 38px;
-      font-weight: 300; line-height: 1.2;
-      color: var(--white);
-    }
-    .features-heading em {
-      font-style: italic; color: var(--gold);
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1px;
-      background: var(--white-ghost);
-      border: 1px solid var(--white-ghost);
-    }
-    .feature-card {
-      background: var(--ink);
-      padding: 36px 32px;
-      position: relative;
-      transition: background 0.3s;
-    }
-    .feature-card:hover { background: var(--ink-3); }
-
-    .feature-num {
-      font-family: var(--display); font-size: 13px;
-      color: var(--gold); letter-spacing: 0.1em;
-      margin-bottom: 20px; display: block;
-    }
-    .feature-title {
-      font-family: var(--serif); font-size: 22px;
-      font-weight: 400; color: var(--white);
-      margin-bottom: 12px; line-height: 1.3;
-    }
-    .feature-desc {
-      font-family: var(--mono); font-size: 11.5px;
-      line-height: 1.8; color: var(--white-faint);
-    }
-    .feature-tag {
-      position: absolute; top: 20px; right: 20px;
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: 0.12em; text-transform: uppercase;
-      padding: 4px 8px;
-      border: 1px solid var(--white-ghost);
-      color: var(--white-faint);
-    }
-
-    /* ─── ARCHITECTURE ───────────────────────────────────── */
-    .arch-section {
-      padding: 100px 48px;
-      max-width: 1200px; margin: 0 auto;
-    }
-    .arch-header {
-      display: flex; justify-content: space-between;
-      align-items: flex-end; margin-bottom: 60px;
-    }
-    .arch-title {
-      font-family: var(--display); font-size: clamp(40px, 5vw, 72px);
-      line-height: 0.9; color: var(--white);
-    }
-    .arch-note {
-      font-family: var(--mono); font-size: 11px;
-      color: var(--white-faint); line-height: 1.7;
-      max-width: 260px; text-align: right;
-    }
-
-    .arch-layers {
-      display: flex; flex-direction: column; gap: 1px;
-    }
-    .arch-layer {
-      display: grid; grid-template-columns: 200px 1fr;
-      background: var(--white-ghost);
-      transition: all 0.3s;
-    }
-    .arch-layer:hover .arch-layer-body { background: var(--ink-3); }
-
-    .arch-layer-label {
-      background: var(--ink-2);
-      padding: 24px 28px;
-      display: flex; flex-direction: column; justify-content: center;
-      border-right: 1px solid var(--white-ghost);
-    }
-    .arch-layer-name {
-      font-family: var(--display); font-size: 14px;
-      letter-spacing: 0.1em; color: var(--gold);
-      margin-bottom: 6px;
-    }
-    .arch-layer-tech {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--white-faint); letter-spacing: 0.08em;
-    }
-    .arch-layer-body {
-      background: var(--ink);
-      padding: 22px 32px;
-      display: flex; align-items: center;
-      gap: 10px; flex-wrap: wrap;
-      transition: background 0.3s;
-    }
-    .arch-chip {
-      font-family: var(--mono); font-size: 11px;
-      padding: 6px 12px;
-      border: 1px solid var(--white-ghost);
-      color: var(--white-dim);
-      letter-spacing: 0.06em;
-      transition: all 0.2s;
-    }
-    .arch-layer:hover .arch-chip {
-      border-color: var(--gold-dim);
-      color: var(--white);
-    }
-
-    /* ─── MESAS ──────────────────────────────────────────── */
-    .mesas-section {
-      padding: 100px 48px;
-      max-width: 1200px; margin: 0 auto;
-    }
-    .mesas-header {
-      margin-bottom: 56px;
-    }
-    .mesas-eyebrow {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.2em; color: var(--gold);
-      text-transform: uppercase; margin-bottom: 16px;
-    }
-    .mesas-title {
-      font-family: var(--serif); font-size: clamp(32px, 4vw, 52px);
-      font-weight: 300; color: var(--white); line-height: 1.2;
-    }
-
-    .mesas-list {
-      display: flex; flex-direction: column; gap: 1px;
-      border: 1px solid var(--white-ghost);
-    }
-    .mesa-row {
-      display: grid;
-      grid-template-columns: 56px 1fr 1fr auto;
-      align-items: center;
-      background: var(--ink);
-      padding: 0;
-      transition: background 0.25s;
-      cursor: default;
-    }
-    .mesa-row:hover { background: var(--ink-3); }
-    .mesa-row + .mesa-row { border-top: 1px solid var(--white-ghost); }
-
-    .mesa-num {
-      font-family: var(--display); font-size: 12px;
-      color: var(--white-faint); letter-spacing: 0.1em;
-      padding: 24px 0 24px 24px;
-      border-right: 1px solid var(--white-ghost);
-      text-align: center;
-    }
-    .mesa-info { padding: 24px 28px; }
-    .mesa-name {
-      font-family: var(--serif); font-size: 18px;
-      color: var(--white); margin-bottom: 4px;
-    }
-    .mesa-slug {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--white-faint); letter-spacing: 0.1em;
-    }
-    .mesa-caps {
-      padding: 24px 28px;
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
-    .mesa-cap {
-      font-family: var(--mono); font-size: 10px;
-      padding: 3px 9px; letter-spacing: 0.08em;
-      border: 1px solid;
-    }
-    .mesa-cap.on  { border-color: var(--gold-dim); color: var(--gold); }
-    .mesa-cap.off { border-color: var(--white-ghost); color: var(--white-faint); }
-
-    .mesa-arrow {
-      padding: 24px 24px 24px 0;
-      font-size: 14px; color: var(--white-faint);
-      transition: all 0.2s;
-    }
-    .mesa-row:hover .mesa-arrow { color: var(--gold); transform: translateX(4px); }
-
-    /* ─── DISCLAIMER ─────────────────────────────────────── */
-    .disclaimer-section {
-      padding: 80px 48px;
-      max-width: 800px; margin: 0 auto;
-      text-align: center;
-    }
-    .disclaimer-icon {
-      font-size: 22px; color: var(--gold-dim); margin-bottom: 20px;
-    }
-    .disclaimer-text {
-      font-family: var(--serif); font-size: 16px;
-      font-style: italic; font-weight: 300;
-      color: var(--white-faint); line-height: 1.9;
-    }
-
-    /* ─── FOOTER ─────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--white-ghost);
-      padding: 48px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .footer-logo {
-      font-family: var(--display); font-size: 18px;
-      letter-spacing: 0.15em; color: var(--gold);
-    }
-    .footer-meta {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.1em; color: var(--white-faint);
-      text-align: right; line-height: 1.8;
-    }
-    .footer-links {
-      display: flex; gap: 32px; list-style: none;
-    }
-    .footer-links a {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.12em; text-transform: uppercase;
-      text-decoration: none; color: var(--white-faint);
-      transition: color 0.2s;
-    }
-    .footer-links a:hover { color: var(--gold); }
-
-    /* ─── KEYFRAMES ──────────────────────────────────────── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0);    }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    @keyframes spinSlow {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
-    @keyframes spinReverse {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(-360deg); }
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.35; }
-    }
-
-    /* ─── SCROLL REVEAL ──────────────────────────────────── */
-    .reveal {
-      opacity: 0; transform: translateY(28px);
-      transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1);
-    }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-
-    /* ─── RESPONSIVE ─────────────────────────────────────── */
-    @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; }
-      .hero::after { display: none; }
-      .hero-left { padding: 100px 32px 60px; }
-      .hero-right { padding: 40px 32px 80px; }
-      .features { grid-template-columns: 1fr; padding: 80px 32px; }
-      .features-grid { grid-template-columns: 1fr; }
-      .arch-header { flex-direction: column; align-items: flex-start; gap: 20px; }
-      .arch-note { text-align: left; }
-      .arch-layer { grid-template-columns: 140px 1fr; }
-      .mesa-row { grid-template-columns: 40px 1fr auto; }
-      .mesa-caps { display: none; }
-      nav { padding: 20px 24px; }
-      .nav-links { display: none; }
-      footer { flex-direction: column; gap: 24px; text-align: center; }
-      .footer-meta { text-align: center; }
-    }
-  </style>
+@media(max-width:768px){
+  nav{padding:0 18px;}
+  .nav-links{display:none;}
+  .grid3{grid-template-columns:1fr;}
+  .arch-wrap{grid-template-columns:1fr;}
+  .arch-diag{height:260px;}
+  .rm-grid{grid-template-columns:1fr 1fr;gap:20px;}
+  .rm-grid::before,.rm-dot{display:none;}
+  .rm-phase{padding-top:0;}
+  footer{flex-direction:column;}
+  .ft-disc{text-align:left;}
+  .stats-bar{flex-wrap:wrap;}
+  .stat{min-width:130px;border-right:none;border-bottom:1px solid var(--border);padding:14px;}
+  .stat:last-child{border-bottom:none;}
+  .cta-box{padding:36px 18px;}
+}
+</style>
 </head>
 <body>
+<div class="glow glow1"></div>
+<div class="glow glow2"></div>
 
-  <!-- Cursor -->
-  <div id="cursor"></div>
-  <div id="cursor-ring"></div>
+<nav>
+  <a href="#inicio" class="nav-logo">
+    <img src="1000046356.png" alt="AXIS CORE">
+    <span class="nav-logo-text">AXIS <span>CORE™</span></span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#inicio">INÍCIO</a></li>
+    <li><a href="#recursos">RECURSOS</a></li>
+    <li><a href="#roadmap">ROADMAP</a></li>
+  </ul>
+  <a href="#entrar" class="nav-cta">ENTRAR</a>
+</nav>
 
-  <!-- NAV -->
-  <nav id="nav">
-    <a href="#" class="nav-logo">
-      <span class="nav-logo-axis">AXIS</span>
-      <span class="nav-logo-core">CORE™</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="#features">Plataforma</a></li>
-      <li><a href="#arch">Arquitetura</a></li>
-      <li><a href="#mesas">Engine</a></li>
-    </ul>
-    <a href="#" class="nav-cta">Acessar</a>
-  </nav>
+<div id="inicio">
+  <div class="hero-badge">PLATAFORMA ENTERPRISE · V1.0</div>
+  <div class="hero-logo-wrap">
+    <img src="1000046356.png" alt="AXIS CORE™" class="hero-logo">
+  </div>
+  <h1 class="hero-title">AXIS <span>CORE™</span></h1>
+  <p class="hero-sub-line">SISTEMA OPERACIONAL TERAPÊUTICO MULTIDIMENSIONAL</p>
+  <p class="hero-desc">Gestão de clientes, atendimentos, protocolos, mesas terapêuticas e inteligência artificial em uma única plataforma.</p>
+  <div class="hero-btns">
+    <a href="#recursos" class="btn-p">Conhecer Plataforma</a>
+    <a href="#entrar" class="btn-s">Acessar Sistema →</a>
+  </div>
+  <div class="hero-scroll">
+    <div class="scroll-line"></div>
+    <span class="scroll-txt">EXPLORAR</span>
+  </div>
+</div>
 
-  <!-- HERO -->
-  <section class="hero">
-    <!-- Background grid lines -->
-    <div style="
-      position: absolute; inset: 0; pointer-events: none; z-index: 0;
-      background-image:
-        linear-gradient(to right, rgba(240,236,228,0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(240,236,228,0.03) 1px, transparent 1px);
-      background-size: 80px 80px;
-    "></div>
+<div class="stats-bar">
+  <div class="stat"><div class="stat-v">8</div><div class="stat-l">MESAS / ENGINE</div></div>
+  <div class="stat"><div class="stat-v">4</div><div class="stat-l">PERFIS RBAC</div></div>
+  <div class="stat"><div class="stat-v">WS</div><div class="stat-l">TEMPO REAL</div></div>
+  <div class="stat"><div class="stat-v">IA</div><div class="stat-l">SUPERVISORA</div></div>
+  <div class="stat"><div class="stat-v">PPG</div><div class="stat-l">BIOMETRIA</div></div>
+</div>
 
-    <!-- Radial ambient -->
-    <div style="
-      position: absolute; bottom: -100px; left: -100px;
-      width: 600px; height: 600px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(91,141,238,0.06) 0%, transparent 60%);
-      pointer-events: none;
-    "></div>
-
-    <div class="hero-left">
-      <div class="hero-eyebrow">Plataforma Enterprise · v1.0</div>
-
-      <h1 class="hero-title">
-        AXIS<br/>
-        <em>CORE</em><br/>
-        ™
-      </h1>
-
-      <p class="hero-subtitle">
-        Infraestrutura terapêutica modular — sessões em tempo real,
-        engine extensível por JSON, biometria e dispositivos físicos
-        sob uma arquitetura enterprise.
-      </p>
-
-      <div class="hero-actions">
-        <a href="#" class="btn-primary">Entrar na Plataforma</a>
-        <a href="#arch" class="btn-ghost">
-          Ver Arquitetura
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </a>
-      </div>
+<section id="recursos">
+  <div class="reveal">
+    <p class="s-tag">MÓDULOS DA PLATAFORMA</p>
+    <h2 class="s-title">Tudo que você precisa<br>em um só lugar</h2>
+    <p class="s-desc">Cada módulo foi projetado para o fluxo real da prática terapêutica — do primeiro atendimento ao relatório final.</p>
+  </div>
+  <div class="grid3">
+    <div class="card reveal d1">
+      <span class="card-glyph">⬡</span>
+      <h3 class="card-title">Dashboard</h3>
+      <p class="card-desc">Visão completa da prática em tempo real. Sessões do dia, métricas de coerência e atividade dos clientes.</p>
+      <ul class="card-feats">
+        <li>Sessões ao vivo com status realtime</li>
+        <li>Métricas BPM, HRV e coerência</li>
+        <li>KPIs mensais e evolução</li>
+        <li>Alertas e notificações push</li>
+      </ul>
+      <span class="card-tag">REALTIME · WEBSOCKET</span>
     </div>
-
-    <div class="hero-right">
-      <!-- Circular diagram SVG -->
-      <div class="diagram-wrap">
-        <svg viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- Outer ring rotating -->
-          <g style="transform-origin:160px 160px; animation: spinSlow 40s linear infinite;">
-            <circle cx="160" cy="160" r="148" stroke="rgba(91,141,238,0.12)" stroke-width="1"/>
-            <!-- Tick marks -->
-            <g stroke="rgba(91,141,238,0.25)" stroke-width="1">
-              <line x1="160" y1="12"  x2="160" y2="26"/>
-              <line x1="160" y1="294" x2="160" y2="308"/>
-              <line x1="12"  y1="160" x2="26"  y2="160"/>
-              <line x1="294" y1="160" x2="308" y2="160"/>
-              <line x1="65"  y1="34"  x2="72"  y2="46"/>
-              <line x1="248" y1="274" x2="255" y2="286"/>
-              <line x1="34"  y1="255" x2="46"  y2="248"/>
-              <line x1="274" y1="65"  x2="286" y2="72"/>
-            </g>
-          </g>
-
-          <!-- Middle ring counter -->
-          <g style="transform-origin:160px 160px; animation: spinReverse 25s linear infinite;">
-            <circle cx="160" cy="160" r="108" stroke="rgba(91,141,238,0.08)" stroke-width="1" stroke-dasharray="4 8"/>
-          </g>
-
-          <!-- Inner ring static -->
-          <circle cx="160" cy="160" r="68" stroke="rgba(91,141,238,0.2)" stroke-width="1"/>
-
-          <!-- Center -->
-          <circle cx="160" cy="160" r="4" fill="#5b8dee"/>
-          <circle cx="160" cy="160" r="28" stroke="rgba(91,141,238,0.3)" stroke-width="1"
-            style="animation: pulse 3s ease-in-out infinite;"/>
-
-          <!-- Axis lines -->
-          <line x1="92" y1="160" x2="228" y2="160" stroke="rgba(91,141,238,0.15)" stroke-width="1"/>
-          <line x1="160" y1="92"  x2="160" y2="228" stroke="rgba(91,141,238,0.15)" stroke-width="1"/>
-
-          <!-- Node dots on inner ring -->
-          <circle cx="160" cy="92"  r="3" fill="rgba(91,141,238,0.5)"/>
-          <circle cx="228" cy="160" r="3" fill="rgba(91,141,238,0.5)"/>
-          <circle cx="160" cy="228" r="3" fill="rgba(91,141,238,0.5)"/>
-          <circle cx="92"  cy="160" r="3" fill="rgba(91,141,238,0.5)"/>
-
-          <!-- Diagonal nodes on middle ring -->
-          <circle cx="236" cy="84"  r="2.5" fill="rgba(91,141,238,0.35)"
-            style="transform-origin:160px 160px; animation: spinReverse 25s linear infinite;"/>
-          <circle cx="84"  cy="236" r="2.5" fill="rgba(91,141,238,0.35)"
-            style="transform-origin:160px 160px; animation: spinReverse 25s linear infinite;"/>
-
-          <!-- Labels -->
-          <text x="160" y="72" text-anchor="middle"
-            font-family="'DM Mono', monospace" font-size="9" fill="rgba(91,141,238,0.6)" letter-spacing="0.12em">
-            FRONTEND
-          </text>
-          <text x="248" y="165" text-anchor="start"
-            font-family="'DM Mono', monospace" font-size="9" fill="rgba(91,141,238,0.6)" letter-spacing="0.12em">
-            MQTT
-          </text>
-          <text x="160" y="248" text-anchor="middle"
-            font-family="'DM Mono', monospace" font-size="9" fill="rgba(91,141,238,0.6)" letter-spacing="0.12em">
-            BACKEND
-          </text>
-          <text x="72" y="165" text-anchor="end"
-            font-family="'DM Mono', monospace" font-size="9" fill="rgba(91,141,238,0.6)" letter-spacing="0.12em">
-            DATA
-          </text>
-
-          <!-- Center label -->
-          <text x="160" y="155" text-anchor="middle"
-            font-family="'Bebas Neue', sans-serif" font-size="13" fill="#5b8dee" letter-spacing="0.2em">
-            AXIS
-          </text>
-          <text x="160" y="169" text-anchor="middle"
-            font-family="'DM Mono', monospace" font-size="8" fill="rgba(91,141,238,0.5)" letter-spacing="0.15em">
-            ENGINE
-          </text>
-        </svg>
-      </div>
-
-      <!-- Stats -->
-      <div class="hero-stats">
-        <div class="stat-cell">
-          <div class="stat-value">5</div>
-          <div class="stat-label">Mesas / Engine</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-value">4</div>
-          <div class="stat-label">Perfis RBAC</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-value">WS</div>
-          <div class="stat-label">Tempo Real</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-value">E2E</div>
-          <div class="stat-label">Multi-Tenant</div>
-        </div>
-      </div>
+    <div class="card reveal d2">
+      <span class="card-glyph">◎</span>
+      <h3 class="card-title">Clientes</h3>
+      <p class="card-desc">Gestão completa com histórico de sessões, evolução do campo energético e relatórios de acompanhamento.</p>
+      <ul class="card-feats">
+        <li>Ficha completa com histórico</li>
+        <li>Evolução de coerência por sessão</li>
+        <li>Agendamento integrado</li>
+        <li>Notificações automáticas</li>
+      </ul>
+      <span class="card-tag">MULTI-TENANT · RLS</span>
     </div>
-  </section>
-
-  <!-- MARQUEE -->
-  <div class="marquee-wrap">
-    <div class="marquee-track" id="marquee">
-      <!-- duplicated for seamless loop -->
+    <div class="card reveal d3">
+      <span class="card-glyph">◈</span>
+      <h3 class="card-title">Atendimentos</h3>
+      <p class="card-desc">Sessões ao vivo com biometria PPG via câmera, Engine AXIS™ e IA supervisora em tempo real.</p>
+      <ul class="card-feats">
+        <li>PPG — BPM, HRV, RMSSD ao vivo</li>
+        <li>Coerência cardíaca e stress</li>
+        <li>Waveform em tempo real</li>
+        <li>IA de supervisão integrada</li>
+      </ul>
+      <span class="card-tag">PPG · BIOMETRIA · AO VIVO</span>
+    </div>
+    <div class="card reveal d1">
+      <span class="card-glyph">⚡</span>
+      <h3 class="card-title">Mesas AXIS™</h3>
+      <p class="card-desc">Engine modular com 8 mesas terapêuticas configuráveis via JSON e controle MQTT para dispositivos físicos.</p>
+      <ul class="card-feats">
+        <li>Hado Quantum · Frequências · Chakras</li>
+        <li>Radiônica · Multidimensional</li>
+        <li>Ancestral · Prosperidade · Relacionamentos</li>
+        <li>Integração ESP32 via MQTT/TLS</li>
+      </ul>
+      <span class="card-tag">MQTT · 8 MESAS · JSON</span>
+    </div>
+    <div class="card reveal d2">
+      <span class="card-glyph">▦</span>
+      <h3 class="card-title">Relatórios</h3>
+      <p class="card-desc">Geração de PDF profissional com assinatura digital SHA-256, chakras, métricas biométricas e observações.</p>
+      <ul class="card-feats">
+        <li>PDF server-side com WeasyPrint</li>
+        <li>Assinatura digital SHA-256</li>
+        <li>Upload automático ao Supabase</li>
+        <li>Envio por email ao cliente</li>
+      </ul>
+      <span class="card-tag">PDF · SHA-256 · STORAGE</span>
+    </div>
+    <div class="card reveal d3">
+      <span class="card-glyph">✦</span>
+      <h3 class="card-title">IA AXIS™</h3>
+      <p class="card-desc">Inteligência artificial supervisora integrada ao Claude (Anthropic). Análise em tempo real e protocolos.</p>
+      <ul class="card-feats">
+        <li>Análise de campo biométrico</li>
+        <li>Sugestão de protocolo por mesa</li>
+        <li>Geração de relatório narrativo</li>
+        <li>Recomendações de continuidade</li>
+      </ul>
+      <span class="card-tag">CLAUDE · ANTHROPIC · IA</span>
     </div>
   </div>
+</section>
 
-  <!-- FEATURES -->
-  <section class="features" id="features">
-    <div>
-      <div class="features-label reveal">Fundação Técnica</div>
-      <h2 class="features-heading reveal">Uma plataforma<br/><em>desenhada</em><br/>para escalar.</h2>
-    </div>
-
-    <div class="features-grid reveal">
-      <div class="feature-card">
-        <span class="feature-tag">CORE</span>
-        <span class="feature-num">01</span>
-        <h3 class="feature-title">Sessões em Tempo Real</h3>
-        <p class="feature-desc">WebSocket persistente por sessão. Broadcast isolado por tenant. Reconexão automática com backoff exponencial.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-tag">ENGINE</span>
-        <span class="feature-num">02</span>
-        <h3 class="feature-title">AxisEngine Modular</h3>
-        <p class="feature-desc">Mesas definidas em JSON. Registry singleton extensível. Loader com validação de schema. Novos módulos sem deploy.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-tag">INFRA</span>
-        <span class="feature-num">03</span>
-        <h3 class="feature-title">Dispositivos Físicos</h3>
-        <p class="feature-desc">Comunicação MQTT com ESP32. Tópicos por mesa. Status em tempo real. Suporte a múltiplos dispositivos por tenant.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-tag">DATA</span>
-        <span class="feature-num">04</span>
-        <h3 class="feature-title">Multi-Tenancy + RLS</h3>
-        <p class="feature-desc">Isolamento por tenant no banco de dados. Row Level Security no Supabase. Cada terapeuta opera em namespace isolado.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-tag">AUTH</span>
-        <span class="feature-num">05</span>
-        <h3 class="feature-title">RBAC Granular</h3>
-        <p class="feature-desc">Quatro perfis: Admin, Terapeuta, Cliente, Aluno. Permissões por recurso e ação. Middleware automático no frontend.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-tag">OPS</span>
-        <span class="feature-num">06</span>
-        <h3 class="feature-title">Deploy Contínuo</h3>
-        <p class="feature-desc">Vercel + Render + Supabase. Docker multi-stage. Turborepo monorepo. CI/CD automático a cada push.</p>
-      </div>
-    </div>
-  </section>
-
-  <div class="section-rule"></div>
-
-  <!-- ARCHITECTURE -->
-  <div style="background: var(--ink-2); padding: 1px 0;">
-  <section class="arch-section" id="arch">
-    <div class="arch-header reveal">
-      <h2 class="arch-title">STACK<br/>TÉCNICO</h2>
-      <p class="arch-note">
-        Arquitetura separada por camadas.<br/>
-        Cada serviço com responsabilidade única<br/>
-        e deploy independente.
-      </p>
-    </div>
-
-    <div class="arch-layers reveal">
-      <div class="arch-layer">
-        <div class="arch-layer-label">
-          <div class="arch-layer-name">FRONTEND</div>
-          <div class="arch-layer-tech">Vercel · Edge</div>
-        </div>
-        <div class="arch-layer-body">
-          <span class="arch-chip">Next.js 15</span>
-          <span class="arch-chip">TypeScript</span>
-          <span class="arch-chip">Tailwind CSS</span>
-          <span class="arch-chip">Shadcn UI</span>
-          <span class="arch-chip">Zustand</span>
-          <span class="arch-chip">WebSocket Client</span>
-        </div>
-      </div>
-      <div class="arch-layer">
-        <div class="arch-layer-label">
-          <div class="arch-layer-name">BACKEND</div>
-          <div class="arch-layer-tech">Render · Docker</div>
-        </div>
-        <div class="arch-layer-body">
-          <span class="arch-chip">FastAPI</span>
-          <span class="arch-chip">Python 3.12</span>
-          <span class="arch-chip">Pydantic v2</span>
-          <span class="arch-chip">WebSockets</span>
-          <span class="arch-chip">aiomqtt</span>
-          <span class="arch-chip">Celery</span>
-        </div>
-      </div>
-      <div class="arch-layer">
-        <div class="arch-layer-label">
-          <div class="arch-layer-name">DADOS</div>
-          <div class="arch-layer-tech">Supabase</div>
-        </div>
-        <div class="arch-layer-body">
-          <span class="arch-chip">PostgreSQL</span>
-          <span class="arch-chip">Row Level Security</span>
-          <span class="arch-chip">Supabase Auth</span>
-          <span class="arch-chip">Supabase Storage</span>
-          <span class="arch-chip">Redis · Upstash</span>
-        </div>
-      </div>
-      <div class="arch-layer">
-        <div class="arch-layer-label">
-          <div class="arch-layer-name">FÍSICO</div>
-          <div class="arch-layer-tech">EMQX · ESP32</div>
-        </div>
-        <div class="arch-layer-body">
-          <span class="arch-chip">MQTT v5</span>
-          <span class="arch-chip">EMQX Cloud</span>
-          <span class="arch-chip">ESP32</span>
-          <span class="arch-chip">Sensores HRV</span>
-          <span class="arch-chip">LEDs Frequenciais</span>
-        </div>
-      </div>
-      <div class="arch-layer">
-        <div class="arch-layer-label">
-          <div class="arch-layer-name">ENGINE</div>
-          <div class="arch-layer-tech">Turborepo · packages/</div>
-        </div>
-        <div class="arch-layer-body">
-          <span class="arch-chip">AxisTableRegistry</span>
-          <span class="arch-chip">AxisTableLoader</span>
-          <span class="arch-chip">JSON-driven</span>
-          <span class="arch-chip">@axis/core types</span>
-          <span class="arch-chip">5 mesas nativas</span>
-        </div>
-      </div>
-    </div>
-  </section>
+<section style="border-top:1px solid var(--border);max-width:1100px;">
+  <div class="reveal">
+    <p class="s-tag">STACK TÉCNICO</p>
+    <h2 class="s-title">Arquitetura enterprise<br>de ponta a ponta</h2>
   </div>
-
-  <div class="section-rule"></div>
-
-  <!-- MESAS -->
-  <section class="mesas-section" id="mesas">
-    <div class="mesas-header reveal">
-      <div class="mesas-eyebrow">AxisEngine · 5 Módulos</div>
-      <h2 class="mesas-title">Mesas carregáveis<br/>por configuração JSON.</h2>
+  <div class="arch-wrap reveal">
+    <div class="arch-diag">
+      <div class="ring ring1"></div>
+      <div class="ring ring2"></div>
+      <div class="ring ring3"></div>
+      <div class="arch-ctr"><div class="arch-ctr-txt">AXIS<br>ENGINE</div></div>
+      <div class="onode" style="top:5%;left:50%;transform:translateX(-50%)"><span>◈</span>FRONT</div>
+      <div class="onode" style="bottom:5%;left:50%;transform:translateX(-50%)"><span>⬡</span>BACK</div>
+      <div class="onode" style="top:50%;left:1%;transform:translateY(-50%)"><span>▦</span>DATA</div>
+      <div class="onode" style="top:50%;right:1%;transform:translateY(-50%)"><span>⚡</span>MQTT</div>
     </div>
-
-    <div class="mesas-list reveal">
-      <div class="mesa-row">
-        <div class="mesa-num">01</div>
-        <div class="mesa-info">
-          <div class="mesa-name">Mesa Hado Quantum</div>
-          <div class="mesa-slug">axis/hado · hado_quantum</div>
-        </div>
-        <div class="mesa-caps">
-          <span class="mesa-cap on">Realtime</span>
-          <span class="mesa-cap on">Físico</span>
-          <span class="mesa-cap off">Biometria</span>
-          <span class="mesa-cap off">Multi-user</span>
-        </div>
-        <div class="mesa-arrow">→</div>
-      </div>
-      <div class="mesa-row">
-        <div class="mesa-num">02</div>
-        <div class="mesa-info">
-          <div class="mesa-name">Mesa Multidimensional</div>
-          <div class="mesa-slug">axis/multi · multidimensional</div>
-        </div>
-        <div class="mesa-caps">
-          <span class="mesa-cap on">Realtime</span>
-          <span class="mesa-cap on">Físico</span>
-          <span class="mesa-cap on">Biometria</span>
-          <span class="mesa-cap on">Multi-user</span>
-        </div>
-        <div class="mesa-arrow">→</div>
-      </div>
-      <div class="mesa-row">
-        <div class="mesa-num">03</div>
-        <div class="mesa-info">
-          <div class="mesa-name">Máquina Radiônica</div>
-          <div class="mesa-slug">axis/radionica · radionica</div>
-        </div>
-        <div class="mesa-caps">
-          <span class="mesa-cap off">Realtime</span>
-          <span class="mesa-cap on">Físico</span>
-          <span class="mesa-cap off">Biometria</span>
-          <span class="mesa-cap off">Multi-user</span>
-        </div>
-        <div class="mesa-arrow">→</div>
-      </div>
-      <div class="mesa-row">
-        <div class="mesa-num">04</div>
-        <div class="mesa-info">
-          <div class="mesa-name">Mesa de Chakras</div>
-          <div class="mesa-slug">axis/chakras · chakras</div>
-        </div>
-        <div class="mesa-caps">
-          <span class="mesa-cap on">Realtime</span>
-          <span class="mesa-cap on">Físico</span>
-          <span class="mesa-cap on">Biometria</span>
-          <span class="mesa-cap off">Multi-user</span>
-        </div>
-        <div class="mesa-arrow">→</div>
-      </div>
-      <div class="mesa-row">
-        <div class="mesa-num">05</div>
-        <div class="mesa-info">
-          <div class="mesa-name">Mesa de Frequências</div>
-          <div class="mesa-slug">axis/frequencies · frequencies</div>
-        </div>
-        <div class="mesa-caps">
-          <span class="mesa-cap on">Realtime</span>
-          <span class="mesa-cap on">Físico</span>
-          <span class="mesa-cap on">Biometria</span>
-          <span class="mesa-cap off">Multi-user</span>
-        </div>
-        <div class="mesa-arrow">→</div>
-      </div>
+    <div class="arch-list">
+      <div class="a-item"><div class="a-icon">◈</div><div><div class="a-title">Frontend</div><div class="a-desc">Next.js 15 · TypeScript · Tailwind · Vercel</div></div></div>
+      <div class="a-item"><div class="a-icon">⬡</div><div><div class="a-title">Backend</div><div class="a-desc">FastAPI · Python 3.12 · Docker · Render · Redis</div></div></div>
+      <div class="a-item"><div class="a-icon">▦</div><div><div class="a-title">Banco de Dados</div><div class="a-desc">Supabase PostgreSQL · RLS · Realtime · Storage</div></div></div>
+      <div class="a-item"><div class="a-icon">⚡</div><div><div class="a-title">Engine & Dispositivos</div><div class="a-desc">MQTT (EMQX) · TLS 8883 · ESP32 · JSON</div></div></div>
+      <div class="a-item"><div class="a-icon">◎</div><div><div class="a-title">Mobile</div><div class="a-desc">Expo SDK 52 · React Native · iOS + Android · EAS</div></div></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <div class="section-rule"></div>
-
-  <!-- DISCLAIMER -->
-  <section class="disclaimer-section">
-    <div class="disclaimer-icon">⊹</div>
-    <p class="disclaimer-text reveal">
-      "Ferramenta complementar de desenvolvimento pessoal e terapêutico.<br/>
-      Não substitui acompanhamento médico, psicológico<br/>
-      ou profissional de saúde licenciado."
-    </p>
-  </section>
-
-  <!-- FOOTER -->
-  <footer>
-    <div class="footer-logo">AXIS CORE™</div>
-    <ul class="footer-links">
-      <li><a href="#">Documentação</a></li>
-      <li><a href="#">API</a></li>
-      <li><a href="#">Engine</a></li>
-      <li><a href="#">Deploy</a></li>
-    </ul>
-    <div class="footer-meta">
-      v1.0.0 · Fase 1<br/>
-      Next.js 15 + FastAPI + Supabase
+<section id="roadmap" style="border-top:1px solid var(--border);max-width:1100px;">
+  <div class="reveal">
+    <p class="s-tag">EVOLUÇÃO DA PLATAFORMA</p>
+    <h2 class="s-title">Roadmap</h2>
+    <p class="s-desc">O AXIS CORE™ é uma plataforma viva — cada fase adiciona profundidade ao ecossistema terapêutico.</p>
+  </div>
+  <div class="rm-grid reveal">
+    <div class="rm-phase">
+      <div class="rm-dot active"></div>
+      <div class="rm-phase-label">FASE 1 · ATUAL</div>
+      <div class="rm-phase-title">Core Platform</div>
+      <ul class="rm-items">
+        <li class="done">4 painéis web por role</li>
+        <li class="done">Engine AXIS™ — 8 mesas</li>
+        <li class="done">PPG biometria via câmera</li>
+        <li class="done">IA supervisora integrada</li>
+        <li class="done">PDF com assinatura digital</li>
+        <li class="done">App mobile iOS + Android</li>
+        <li class="done">Stripe billing — 3 planos</li>
+        <li class="done">Email + push notifications</li>
+      </ul>
     </div>
-  </footer>
+    <div class="rm-phase">
+      <div class="rm-dot"></div>
+      <div class="rm-phase-label">FASE 2 · PRÓXIMA</div>
+      <div class="rm-phase-title">Expansão Clínica</div>
+      <ul class="rm-items">
+        <li>Biometria ESP32 dedicada</li>
+        <li>Google Calendar sync</li>
+        <li>Certificação A1 digital</li>
+        <li>Testes automatizados</li>
+        <li>CI/CD GitHub Actions</li>
+        <li>Monitoring Sentry</li>
+        <li>Multi-idioma pt/en/es</li>
+      </ul>
+    </div>
+    <div class="rm-phase">
+      <div class="rm-dot"></div>
+      <div class="rm-phase-label">FASE 3 · FUTURO</div>
+      <div class="rm-phase-title">Ecossistema</div>
+      <ul class="rm-items">
+        <li>Hardware proprietário AXIS</li>
+        <li>Marketplace de protocolos</li>
+        <li>API pública</li>
+        <li>White-label completo</li>
+        <li>Escola de formação</li>
+        <li>Comunidade terapeutas</li>
+      </ul>
+    </div>
+    <div class="rm-phase">
+      <div class="rm-dot"></div>
+      <div class="rm-phase-label">FASE 4 · VISÃO</div>
+      <div class="rm-phase-title">Consciência Global</div>
+      <ul class="rm-items">
+        <li>Rede global terapeutas</li>
+        <li>Pesquisa clínica com dados</li>
+        <li>Integração hospitalar</li>
+        <li>IA proprietária AXIS</li>
+        <li>Dispositivos wearable</li>
+        <li>Expansão internacional</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
-  <script>
-    // ── Cursor ──────────────────────────────────────────────
-    const cursor = document.getElementById('cursor');
-    const ring   = document.getElementById('cursor-ring');
-    let mx = 0, my = 0, rx = 0, ry = 0;
+<section id="entrar">
+  <div class="cta-box reveal">
+    <p class="s-tag" style="justify-content:center;margin-bottom:18px;">COMECE AGORA</p>
+    <h2 class="cta-title">Pronto para transformar<br>sua prática terapêutica?</h2>
+    <p class="cta-desc">14 dias gratuitos. Sem cartão de crédito. Cancele quando quiser.</p>
+    <div class="hero-btns">
+      <a href="#" class="btn-p">Começar Trial Gratuito</a>
+      <a href="#recursos" class="btn-s">Ver Planos →</a>
+    </div>
+  </div>
+</section>
 
-    document.addEventListener('mousemove', e => {
-      mx = e.clientX; my = e.clientY;
-      cursor.style.left = mx + 'px';
-      cursor.style.top  = my + 'px';
-    });
+<footer>
+  <div>
+    <div class="ft-brand">
+      <img src="1000046356.png" alt="AXIS CORE™">
+      <span class="ft-brand-name">AXIS CORE™</span>
+    </div>
+    <div class="ft-reg">
+      Marcia Britto · Terapeuta Quântica Registrada e Certificada<br>
+      RQH · M-50340-MT-Brasil · Practitioner Multidimensional
+    </div>
+  </div>
+  <div class="ft-disc">
+    Ferramenta complementar de desenvolvimento pessoal e terapêutico.<br>
+    Não substitui acompanhamento médico, psicológico ou<br>
+    profissional de saúde licenciado.
+  </div>
+  <div class="ft-copy">© 2025 AXIS CORE™ · Todos os direitos reservados · v1.0.0</div>
+</footer>
 
-    (function animateRing() {
-      rx += (mx - rx) * 0.12;
-      ry += (my - ry) * 0.12;
-      ring.style.left = rx + 'px';
-      ring.style.top  = ry + 'px';
-      requestAnimationFrame(animateRing);
-    })();
-
-    // ── Nav scroll ──────────────────────────────────────────
-    const nav = document.getElementById('nav');
-    window.addEventListener('scroll', () => {
-      nav.classList.toggle('scrolled', window.scrollY > 60);
-    });
-
-    // ── Marquee content ─────────────────────────────────────
-    const items = [
-      'Next.js 15','FastAPI','Supabase','MQTT','WebSocket',
-      'Multi-Tenancy','RBAC','AxisEngine','Turborepo',
-      'PostgreSQL','Redis','ESP32','TypeScript','Python 3.12',
-      'Docker','Vercel','Render','Real-Time','Row Level Security',
-    ];
-    const track = document.getElementById('marquee');
-    const full  = [...items, ...items].map(t =>
-      `<span class="marquee-item"><span class="marquee-dot"></span>${t}</span>`
-    ).join('');
-    track.innerHTML = full;
-
-    // ── Scroll reveal ───────────────────────────────────────
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          e.target.classList.add('visible');
-          observer.unobserve(e.target);
-        }
-      });
-    }, { threshold: 0.12 });
-
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-  </script>
+<script>
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }});
+}, {threshold:0.12});
+document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+window.addEventListener('scroll', () => {
+  document.querySelector('nav').style.boxShadow = window.scrollY > 40 ? '0 4px 32px rgba(0,0,0,0.4)' : 'none';
+});
+</script>
 </body>
 </html>
