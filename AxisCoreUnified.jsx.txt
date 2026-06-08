@@ -1,0 +1,1202 @@
+import { useState, useEffect, createContext, useContext } from "react";
+
+// ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
+const AuthContext = createContext(null);
+export const useAuth = () => useContext(AuthContext);
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+// CONFIGURE: substitua pelos seus valores
+const SUPABASE_URL  = (typeof window !== "undefined" && window.ENV_SUPABASE_URL)  || "https://SEU-PROJETO.supabase.co";
+const SUPABASE_ANON = (typeof window !== "undefined" && window.ENV_SUPABASE_ANON) || "SUA-ANON-KEY";
+
+async function sbFetch(path, opts = {}) {
+  const token = localStorage.getItem("axis_token");
+  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    ...opts,
+    headers: {
+      "apikey": SUPABASE_ANON,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
+  });
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error_description || `HTTP ${res.status}`);
+  return data;
+}
+
+async function sbAuth(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "apikey": SUPABASE_ANON, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || "Falha no login");
+  return data;
+}
+
+// ─── PDF GENERATOR ────────────────────────────────────────────────────────────
+async function generateReportPDF(reportData) {
+  // Usa a API de impressão do navegador como fallback robusto
+  const { client, session, therapist, chakras, coherence, notes, date } = reportData;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Cinzel:wght@400;700&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Cormorant Garamond',Georgia,serif; background:#f5f0e8; color:#2c2416; padding:40px; }
+    .page { max-width:720px; margin:0 auto; background:#f5f0e8; }
+
+    .header { text-align:center; border:2px solid #c4962a55; padding:32px; margin-bottom:24px; position:relative; }
+    .header::before, .header::after { content:'✦'; position:absolute; color:#c4962a88; font-size:20px; }
+    .header::before { top:12px; left:12px; }
+    .header::after  { bottom:12px; right:12px; }
+    .brand    { font-family:'Cinzel',serif; font-size:13px; color:#c4962a; letter-spacing:0.3em; margin-bottom:6px; }
+    .title    { font-family:'Cinzel',serif; font-size:22px; color:#2c2416; letter-spacing:0.08em; margin-bottom:6px; }
+    .subtitle { font-size:13px; font-style:italic; color:#8b7355; }
+
+    .divider { display:flex; align-items:center; gap:10px; margin:16px 0; }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:linear-gradient(to right,transparent,#c4962a44); }
+    .divider span { color:#c4962a88; font-size:12px; }
+
+    .section { margin-bottom:20px; }
+    .section-title { font-family:'Cinzel',serif; font-size:12px; color:#8b7355; letter-spacing:0.2em; text-transform:uppercase; margin-bottom:10px; }
+
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+    .field  { padding:10px 14px; background:#ede6d620; border:1px solid #c4962a22; }
+    .field-label { font-size:9px; color:#8b7355; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:3px; }
+    .field-value { font-size:13px; color:#2c2416; }
+
+    .chakra-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .chakra-name { font-size:12px; color:#4a3f2e; width:72px; flex-shrink:0; }
+    .chakra-bar-bg { flex:1; height:6px; background:#e0d5c0; border-radius:0; }
+    .chakra-bar { height:100%; border-radius:0; }
+    .chakra-val { font-size:11px; color:#8b7355; width:32px; text-align:right; }
+
+    .notes-box { background:#ede6d630; border:1px solid #c4962a22; padding:16px; font-style:italic; font-size:13px; color:#4a3f2e; line-height:1.8; }
+
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; text-align:center; }
+    .metric-val { font-family:'Cinzel',serif; font-size:28px; color:#c4962a; line-height:1; margin-bottom:4px; }
+    .metric-label { font-size:10px; color:#8b7355; letter-spacing:0.1em; }
+
+    .signatures { display:flex; justify-content:space-between; margin-top:32px; padding-top:16px; border-top:1px solid #c4962a33; }
+    .sig-block { text-align:center; width:160px; }
+    .sig-line { border-top:1px solid #8b735555; padding-top:6px; margin-top:32px; }
+    .sig-name { font-size:12px; color:#4a3f2e; font-style:italic; }
+    .sig-role { font-size:9px; color:#8b7355; letter-spacing:0.1em; margin-top:2px; }
+
+    .seal { width:56px; height:56px; border-radius:50%; border:2px solid #c4962a55; display:flex; align-items:center; justify-content:center; margin:0 auto; }
+    .seal-text { font-family:'Cinzel',serif; font-size:18px; color:#c4962a; }
+
+    .disclaimer { margin-top:24px; padding:12px 16px; background:#e0d5c030; border:1px solid #8b735522; font-size:11px; font-style:italic; color:#8b7355; line-height:1.7; text-align:center; }
+    .cert-id { text-align:center; margin-top:12px; font-size:9px; color:#8b735577; letter-spacing:0.1em; }
+
+    @media print {
+      body { background:white; padding:20px; }
+      .page { max-width:none; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="brand">AXIS CORE™ · PLATAFORMA TERAPÊUTICA MULTIDIMENSIONAL</div>
+    <div class="title">Relatório de Sessão</div>
+    <div class="subtitle">${session?.table || "Sessão Terapêutica"} · ${date || new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}</div>
+  </div>
+
+  <div class="divider"><span>✦</span></div>
+
+  <!-- Identificação -->
+  <div class="section">
+    <div class="section-title">Identificação</div>
+    <div class="grid-3">
+      <div class="field">
+        <div class="field-label">Cliente</div>
+        <div class="field-value">${client?.name || "—"}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Terapeuta</div>
+        <div class="field-value">${therapist?.name || "—"}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Mesa Utilizada</div>
+        <div class="field-value">${session?.table || "—"}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Data da Sessão</div>
+        <div class="field-value">${date || "—"}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Duração</div>
+        <div class="field-value">${session?.duration || "—"} min</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Registro Profissional</div>
+        <div class="field-value">${therapist?.registration || "—"}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"><span>◈</span></div>
+
+  <!-- Métricas -->
+  <div class="section">
+    <div class="section-title">Métricas da Sessão</div>
+    <div class="metrics">
+      <div class="field">
+        <div class="metric-val">${coherence || 80}%</div>
+        <div class="metric-label">COERÊNCIA</div>
+      </div>
+      <div class="field">
+        <div class="metric-val">${session?.bpm || 72}</div>
+        <div class="metric-label">BPM MÉDIO</div>
+      </div>
+      <div class="field">
+        <div class="metric-val">${session?.hrv || 48}</div>
+        <div class="metric-label">HRV RMSSD</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"><span>✦</span></div>
+
+  <!-- Chakras -->
+  <div class="section">
+    <div class="section-title">Campo Energético — Leitura de Centros</div>
+    ${(chakras || [
+      {name:"Raiz",val:75,color:"#ef4444"},{name:"Sacral",val:68,color:"#f97316"},
+      {name:"Plexo Solar",val:80,color:"#eab308"},{name:"Cardíaco",val:88,color:"#22c55e"},
+      {name:"Laríngeo",val:72,color:"#3b82f6"},{name:"Frontal",val:70,color:"#8b5cf6"},
+      {name:"Coronário",val:76,color:"#ec4899"}
+    ]).map(c => `
+      <div class="chakra-row">
+        <div class="chakra-name">${c.name}</div>
+        <div class="chakra-bar-bg">
+          <div class="chakra-bar" style="width:${c.val}%;background:${c.color}99;"></div>
+        </div>
+        <div class="chakra-val">${c.val}%</div>
+      </div>
+    `).join("")}
+  </div>
+
+  <div class="divider"><span>◎</span></div>
+
+  <!-- Notas -->
+  <div class="section">
+    <div class="section-title">Observações do Terapeuta</div>
+    <div class="notes-box">"${notes || "Sessão transcorreu de forma positiva. Campo apresentou boa resposta ao protocolo aplicado."}"</div>
+  </div>
+
+  <div class="divider"><span>✦</span></div>
+
+  <!-- Recomendações -->
+  <div class="section">
+    <div class="section-title">Recomendações</div>
+    <div class="field" style="padding:16px;">
+      <p style="font-size:13px;color:#4a3f2e;line-height:1.8;">
+        Recomenda-se continuidade do acompanhamento com frequência quinzenal.
+        Manutenção das práticas de autocuidado e atenção ao campo cardíaco.
+        Próxima sessão sugerida em 15 dias para acompanhamento da evolução.
+      </p>
+    </div>
+  </div>
+
+  <!-- Assinaturas -->
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-line">
+        <div class="sig-name">${therapist?.name || "Terapeuta"}</div>
+        <div class="sig-role">TERAPEUTA RESPONSÁVEL</div>
+      </div>
+    </div>
+    <div class="sig-block">
+      <div class="seal"><div class="seal-text">A</div></div>
+      <div style="margin-top:8px;font-family:'Cinzel',serif;font-size:10px;color:#c4962a;letter-spacing:0.15em;">AXIS CORE™</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line">
+        <div class="sig-name">${client?.name || "Cliente"}</div>
+        <div class="sig-role">CLIENTE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    "Ferramenta complementar de desenvolvimento pessoal e terapêutico. Este relatório não constitui diagnóstico médico,
+    psicológico ou laudo de saúde. Não substitui acompanhamento de profissional de saúde licenciado."
+  </div>
+
+  <div class="cert-id">
+    ID: AXIS-REP-${Date.now()}-${(client?.name||"CLI").replace(/\s/g,"").toUpperCase().slice(0,4)}
+    · Gerado em ${new Date().toLocaleString("pt-BR")}
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  // Abre em nova aba para impressão/download
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, "_blank");
+  if (win) {
+    win.onload = () => {
+      setTimeout(() => win.print(), 500);
+    };
+  }
+  return url;
+}
+
+// ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
+function Spinner({ color = "#6366f1", size = 18 }) {
+  return (
+    <div style={{ width:size, height:size, border:`2px solid rgba(255,255,255,0.1)`, borderTop:`2px solid ${color}`, borderRadius:"50%", animation:"spin 0.8s linear infinite", flexShrink:0 }} />
+  );
+}
+
+function Alert({ type = "error", children }) {
+  const styles = {
+    error:   { bg:"rgba(239,68,68,0.1)",  border:"rgba(239,68,68,0.3)",  color:"#f87171" },
+    success: { bg:"rgba(34,197,94,0.1)",  border:"rgba(34,197,94,0.3)",  color:"#4ade80" },
+    info:    { bg:"rgba(99,102,241,0.1)", border:"rgba(99,102,241,0.3)", color:"#a5b4fc" },
+  };
+  const s = styles[type];
+  return (
+    <div style={{ padding:"10px 14px", borderRadius:8, background:s.bg, border:`1px solid ${s.border}`, fontSize:12, color:s.color, fontFamily:"monospace" }}>
+      {children}
+    </div>
+  );
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onAuth }) {
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [mode, setMode]         = useState("login");
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      const data = await sbAuth(email, password);
+      localStorage.setItem("axis_token", data.access_token);
+      const profile = await sbFetch(`/profiles?id=eq.${data.user.id}&select=*`).catch(()=>null);
+      const user = {
+        id:    data.user.id,
+        email: data.user.email,
+        name:  profile?.[0]?.full_name || data.user.user_metadata?.full_name || email.split("@")[0],
+        role:  profile?.[0]?.role      || data.user.user_metadata?.role || "therapist",
+      };
+      localStorage.setItem("axis_user", JSON.stringify(user));
+      onAuth(user);
+    } catch(err) {
+      setError(err.message);
+    } finally { setLoading(false); }
+  }
+
+  function demoLogin(role) {
+    const demos = {
+      admin:     { id:"demo-admin",     name:"Admin Demo",         role:"admin",     email:"admin@axiscore.app"    },
+      therapist: { id:"demo-therapist", name:"Marcia Britto RQH",  role:"therapist", email:"marcia@axiscore.app"   },
+      client:    { id:"demo-client",    name:"Maria Silva",        role:"client",    email:"maria@cliente.app"     },
+      student:   { id:"demo-student",   name:"Ana Oliveira",       role:"student",   email:"ana@aluno.app"         },
+    };
+    const user = demos[role];
+    localStorage.setItem("axis_token", `demo_${role}`);
+    localStorage.setItem("axis_user", JSON.stringify(user));
+    onAuth(user);
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080a0f", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{background:#080a0f;}
+        input,select,textarea,button{font-family:inherit;}
+      `}</style>
+
+      {/* Grid background */}
+      <div style={{ position:"fixed", inset:0, backgroundImage:"linear-gradient(rgba(99,102,241,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.03) 1px,transparent 1px)", backgroundSize:"60px 60px", pointerEvents:"none" }} />
+      <div style={{ position:"fixed", top:"-15%", left:"50%", transform:"translateX(-50%)", width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle,rgba(99,102,241,0.07) 0%,transparent 60%)", pointerEvents:"none" }} />
+
+      <div style={{ width:"100%", maxWidth:420, animation:"fadeUp 0.5s ease forwards" }}>
+        {/* Logo */}
+        <div style={{ textAlign:"center", marginBottom:36 }}>
+          <div style={{ display:"inline-flex", alignItems:"baseline", gap:8 }}>
+            <span style={{ fontFamily:"'Georgia',serif", fontSize:32, color:"#c8a97e", letterSpacing:"0.15em", fontWeight:700 }}>AXIS</span>
+            <span style={{ fontSize:18, color:"rgba(255,255,255,0.75)", letterSpacing:"0.05em" }}>CORE™</span>
+          </div>
+          <p style={{ fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:6, letterSpacing:"0.18em" }}>
+            PLATAFORMA TERAPÊUTICA MULTIDIMENSIONAL
+          </p>
+        </div>
+
+        <div style={{ background:"rgba(15,17,26,0.9)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:28 }}>
+          {/* Tabs */}
+          <div style={{ display:"flex", gap:2, marginBottom:24, background:"rgba(255,255,255,0.03)", borderRadius:8, padding:3 }}>
+            {["login","cadastro"].map(m => (
+              <button key={m} onClick={()=>setMode(m)} style={{
+                flex:1, padding:"8px 0", fontSize:11, cursor:"pointer", borderRadius:6, border:"none",
+                fontFamily:"monospace", letterSpacing:"0.08em", transition:"all 0.2s",
+                background: mode===m ? "rgba(99,102,241,0.2)" : "transparent",
+                color: mode===m ? "#a5b4fc" : "rgba(255,255,255,0.3)",
+                borderBottom: mode===m ? "2px solid #6366f1" : "2px solid transparent",
+              }}>
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleLogin} style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {mode==="cadastro" && (
+              <div>
+                <label style={{ fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", display:"block", marginBottom:6 }}>NOME COMPLETO</label>
+                <input placeholder="Seu nome completo" style={{ width:"100%", padding:"9px 12px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"monospace", outline:"none" }} />
+              </div>
+            )}
+            <div>
+              <label style={{ fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", display:"block", marginBottom:6 }}>EMAIL</label>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required
+                placeholder="seu@email.com"
+                style={{ width:"100%", padding:"9px 12px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"monospace", outline:"none" }} />
+            </div>
+            <div>
+              <label style={{ fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", display:"block", marginBottom:6 }}>SENHA</label>
+              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required
+                placeholder="••••••••"
+                style={{ width:"100%", padding:"9px 12px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"monospace", outline:"none" }} />
+            </div>
+
+            {error && <Alert type="error">{error}</Alert>}
+
+            <button type="submit" disabled={loading} style={{
+              width:"100%", padding:"11px", borderRadius:8, border:"none", cursor:loading?"not-allowed":"pointer",
+              background:loading?"rgba(99,102,241,0.4)":"#6366f1", color:"#fff",
+              fontFamily:"monospace", fontSize:12, letterSpacing:"0.08em",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            }}>
+              {loading ? <><Spinner size={14} color="#fff" /> Aguarde...</> : mode==="login"?"Entrar":"Criar Conta"}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, margin:"18px 0" }}>
+            <div style={{ flex:1, height:1, background:"rgba(255,255,255,0.06)" }} />
+            <span style={{ fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.2)", letterSpacing:"0.1em" }}>ACESSO DEMO</span>
+            <div style={{ flex:1, height:1, background:"rgba(255,255,255,0.06)" }} />
+          </div>
+
+          {/* Demo roles */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {[
+              { role:"admin",     label:"Admin",      icon:"⬡", color:"#f59e0b" },
+              { role:"therapist", label:"Terapeuta",  icon:"◈", color:"#6366f1" },
+              { role:"client",    label:"Cliente",    icon:"◎", color:"#10b981" },
+              { role:"student",   label:"Aluno",      icon:"✦", color:"#ec4899" },
+            ].map(d => (
+              <button key={d.role} onClick={()=>demoLogin(d.role)} style={{
+                padding:"9px 12px", borderRadius:8,
+                background:`${d.color}10`, border:`1px solid ${d.color}33`,
+                color:d.color, fontFamily:"monospace", fontSize:11,
+                cursor:"pointer", letterSpacing:"0.06em",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                transition:"all 0.2s",
+              }}>
+                <span>{d.icon}</span> {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p style={{ textAlign:"center", fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.18)", marginTop:20, lineHeight:1.7, letterSpacing:"0.06em" }}>
+          Ferramenta complementar de desenvolvimento pessoal.<br/>
+          Não substitui acompanhamento médico ou profissional de saúde.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── ROLE ROUTER ─────────────────────────────────────────────────────────────
+// Lazy imports — cada painel carregado apenas quando necessário
+const ROLE_META = {
+  admin:     { label:"Admin Console",       color:"#00ff80", bg:"#040507" },
+  therapist: { label:"Painel Terapeuta",    color:"#a5b4fc", bg:"#080a0f" },
+  client:    { label:"Painel Cliente",      color:"#b49dff", bg:"#07060f" },
+  student:   { label:"Academia AXIS CORE™", color:"#c4962a", bg:"#2c2416" },
+};
+
+function RoleRouter({ user, onSignOut }) {
+  const [panel, setPanel]   = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Pequeno delay para transição suave
+    const t = setTimeout(() => {
+      setPanel(user.role);
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [user.role]);
+
+  if (loading) {
+    const meta = ROLE_META[user.role] || ROLE_META.therapist;
+    return (
+      <div style={{ minHeight:"100vh", background:meta.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
+        <Spinner color={meta.color} size={32} />
+        <p style={{ fontFamily:"monospace", fontSize:11, color:`${meta.color}66`, letterSpacing:"0.12em" }}>
+          CARREGANDO {meta.label.toUpperCase()}...
+        </p>
+      </div>
+    );
+  }
+
+  // Injeta onSignOut e user em todos os painéis via window para simplicidade
+  window.__axisUser     = user;
+  window.__axisSignOut  = onSignOut;
+  window.__axisGenPDF   = generateReportPDF;
+  window.__axisSbFetch  = sbFetch;
+
+  return <PanelSwitcher role={panel} user={user} onSignOut={onSignOut} />;
+}
+
+// ─── PANEL SWITCHER ───────────────────────────────────────────────────────────
+function PanelSwitcher({ role, user, onSignOut }) {
+  switch (role) {
+    case "admin":     return <AdminPanel     user={user} onSignOut={onSignOut} />;
+    case "therapist": return <TherapistPanel user={user} onSignOut={onSignOut} />;
+    case "client":    return <ClientPanel    user={user} onSignOut={onSignOut} />;
+    case "student":   return <StudentPanel   user={user} onSignOut={onSignOut} />;
+    default:          return <TherapistPanel user={user} onSignOut={onSignOut} />;
+  }
+}
+
+// ─── ADMIN PANEL (condensed — full version in AxisCoreAdmin.jsx) ──────────────
+function AdminPanel({ user, onSignOut }) {
+  const [section, setSection] = useState("overview");
+  const [clock, setClock] = useState(new Date().toLocaleString("pt-BR"));
+  useEffect(() => { const t=setInterval(()=>setClock(new Date().toLocaleString("pt-BR")),1000); return ()=>clearInterval(t); },[]);
+
+  const T = { bg:"#040507", bg1:"#08090d", bg2:"#0d0f15", bg3:"#12151e", green:"#00ff80", greenFaint:"rgba(0,255,128,0.12)", gold:"#ffb800", amber:"#ffb800", red:"#ff4444", blue:"#00aaff", border:"rgba(0,255,128,0.08)", border2:"rgba(0,255,128,0.15)", textFaint:"rgba(0,255,128,0.18)", textDim:"rgba(0,255,128,0.4)", white:"rgba(220,230,220,0.9)" };
+
+  const sections = ["OVERVIEW","TENANTS","TERAPEUTAS","SESSÕES","ENGINE","AUDITORIA","ANALYTICS","SISTEMA"];
+  const kpis = [
+    {l:"Tenants",v:5,c:T.green},{l:"Terapeutas",v:7,c:T.green},
+    {l:"Clientes",v:175,c:T.blue},{l:"Sessões(30d)",v:761,c:T.amber},
+    {l:"Sessões Hoje",v:23,c:T.green},{l:"Uptime",v:"99.9%",c:T.green},
+  ];
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.bg, color:T.green, fontFamily:"monospace", display:"flex", flexDirection:"column" }}>
+      {/* Scanlines */}
+      <div style={{ position:"fixed", inset:0, backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,128,0.012) 2px,rgba(0,255,128,0.012) 4px)", pointerEvents:"none", zIndex:9999 }} />
+
+      {/* Status bar */}
+      <div style={{ height:24, background:T.bg2, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", padding:"0 16px", gap:16, flexShrink:0 }}>
+        <span style={{ fontSize:9, color:T.green, letterSpacing:"0.14em" }}>AXIS CORE™ · ADMIN · v1.0.0</span>
+        <div style={{ flex:1, display:"flex", gap:14 }}>
+          {["API","SUPABASE","MQTT","REDIS"].map(s=>(
+            <span key={s} style={{ fontSize:9, color:"rgba(0,255,128,0.45)", letterSpacing:"0.1em", display:"flex", alignItems:"center", gap:4 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:T.green, display:"inline-block" }} />{s}
+            </span>
+          ))}
+        </div>
+        <span style={{ fontSize:9, color:T.textFaint }}>{clock}</span>
+      </div>
+
+      {/* Top nav */}
+      <div style={{ height:40, background:T.bg1, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", flexShrink:0 }}>
+        <div style={{ width:160, padding:"0 14px", borderRight:`1px solid ${T.border}`, height:"100%", display:"flex", alignItems:"center" }}>
+          <span style={{ fontSize:14, fontWeight:700, color:T.green, letterSpacing:"0.2em" }}>AX</span>
+          <span style={{ fontSize:8, color:T.textDim, marginLeft:6 }}>ADMIN</span>
+        </div>
+        <div style={{ flex:1, display:"flex", height:"100%", overflowX:"auto" }}>
+          {sections.map(s=>(
+            <button key={s} onClick={()=>setSection(s.toLowerCase())} style={{
+              padding:"0 14px", height:"100%", fontFamily:"monospace", fontSize:10,
+              letterSpacing:"0.1em", border:"none", cursor:"pointer",
+              borderBottom: section===s.toLowerCase()?`2px solid ${T.green}`:"2px solid transparent",
+              background: section===s.toLowerCase()?T.greenFaint:"transparent",
+              color: section===s.toLowerCase()?T.green:T.textFaint,
+              whiteSpace:"nowrap",
+            }}>{s}</button>
+          ))}
+        </div>
+        <button onClick={onSignOut} style={{ padding:"0 16px", height:"100%", background:"transparent", border:"none", color:T.textDim, cursor:"pointer", fontSize:12, fontFamily:"monospace", borderLeft:`1px solid ${T.border}` }}>
+          SAIR
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex:1, overflow:"auto", padding:1, background:T.border }}>
+        {/* KPIs */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:1, background:T.border }}>
+          {kpis.map(k=>(
+            <div key={k.l} style={{ background:T.bg1, padding:"14px 16px" }}>
+              <div style={{ fontSize:9, color:T.textFaint, letterSpacing:"0.14em", marginBottom:8 }}>{k.l.toUpperCase()}</div>
+              <div style={{ fontSize:28, fontWeight:700, color:k.c, lineHeight:1 }}>{k.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Activity feed */}
+        <div style={{ background:T.bg1, padding:"14px 16px", marginTop:1 }}>
+          <div style={{ fontSize:9, color:T.textFaint, letterSpacing:"0.14em", marginBottom:10 }}>ACTIVITY FEED — LIVE</div>
+          {[
+            {ts:"11:42",actor:"marcia@luz.com",action:"session.start",resource:"sess-8821",status:"ok"},
+            {ts:"11:38",actor:"admin@axiscore",action:"tenant.update",resource:"ten-003",status:"ok"},
+            {ts:"11:15",actor:"unknown",action:"auth.failed",resource:"—",status:"err"},
+            {ts:"11:10",actor:"fernanda@qt.com",action:"engine.command",resource:"hado-q",status:"ok"},
+            {ts:"10:55",actor:"paulo@qt.com",action:"report.sign",resource:"rep-441",status:"ok"},
+          ].map((l,i)=>(
+            <div key={i} style={{ display:"flex", gap:12, padding:"5px 0", borderBottom:`1px solid ${T.border}`, fontSize:10 }}>
+              <span style={{ color:T.textFaint, width:36 }}>{l.ts}</span>
+              <span style={{ color:l.status==="err"?T.red:T.textDim, width:160 }}>{l.actor}</span>
+              <span style={{ color:l.action.startsWith("auth")?T.red:l.action.startsWith("engine")?T.blue:T.green }}>{l.action}</span>
+              <span style={{ color:T.textFaint }}>{l.resource}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* System health */}
+        <div style={{ background:T.bg1, padding:"14px 16px", marginTop:1 }}>
+          <div style={{ fontSize:9, color:T.textFaint, letterSpacing:"0.14em", marginBottom:12 }}>SYSTEM HEALTH</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            {[{l:"CPU",v:23,c:T.green},{l:"MEMÓRIA",v:61,c:T.amber},{l:"DISCO",v:38,c:T.green},{l:"DB CONN",v:12,c:T.green},{l:"API RPS",v:84,c:T.blue},{l:"ERR RATE",v:0.3,c:T.green}].map(m=>(
+              <div key={m.l}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                  <span style={{ fontSize:9, color:T.textFaint }}>{m.l}</span>
+                  <span style={{ fontSize:10, color:m.c }}>{m.v}{m.l.includes("RATE")||m.l==="CPU"||m.l==="MEMÓRIA"||m.l==="DISCO"?"%":m.l==="API RPS"?" r/s":"/100"}</span>
+                </div>
+                <div style={{ height:2, background:T.bg3 }}><div style={{ height:"100%", width:`${Math.min(100,m.v)}%`, background:m.c }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── THERAPIST PANEL ──────────────────────────────────────────────────────────
+function TherapistPanel({ user, onSignOut }) {
+  const [page, setPage] = useState("dashboard");
+  const [clients, setClients] = useState([
+    {id:"c1",full_name:"Maria Silva",email:"maria@email.com",phone:"(11)99999-0001"},
+    {id:"c2",full_name:"João Santos",email:"joao@email.com",phone:"(11)99999-0002"},
+    {id:"c3",full_name:"Ana Oliveira",email:"ana@email.com",phone:"(11)99999-0003"},
+  ]);
+  const [sessions, setSessions] = useState([
+    {id:"s1",client_id:"c1",client_name:"Maria Silva",table_slug:"hado-quantum",table_name:"Hado Quantum",status:"completed",scheduled_at:"2025-05-28T10:00",duration:62,coherence:84,notes:"Ótima sessão.",bpm:72,hrv:48,chakras:[{name:"Raiz",val:75,color:"#ef4444"},{name:"Sacral",val:68,color:"#f97316"},{name:"Plexo Solar",val:80,color:"#eab308"},{name:"Cardíaco",val:88,color:"#22c55e"},{name:"Laríngeo",val:72,color:"#3b82f6"},{name:"Frontal",val:70,color:"#8b5cf6"},{name:"Coronário",val:76,color:"#ec4899"}]},
+    {id:"s2",client_id:"c2",client_name:"João Santos",table_slug:"frequencies",table_name:"Mesa de Frequências",status:"scheduled",scheduled_at:"2025-05-30T14:00",notes:"Acompanhamento."},
+    {id:"s3",client_id:"c3",client_name:"Ana Oliveira",table_slug:"chakras",table_name:"Mesa de Chakras",status:"in_progress",scheduled_at:"2025-05-30T09:00",notes:"Em andamento."},
+  ]);
+  const [activeSession, setActiveSession] = useState(null);
+  const [engineRunning, setEngineRunning] = useState(false);
+  const [genPdf, setGenPdf] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiOutput, setAiOutput] = useState("");
+  const [bpm, setBpm] = useState(72);
+  const [coherence, setCoherence] = useState(82);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const t = setInterval(() => {
+      setBpm(p => Math.max(55, Math.min(105, p + (Math.random()-.5)*4)));
+      setCoherence(p => Math.max(30, Math.min(99, p + (Math.random()-.5)*2)));
+    }, 1800);
+    return () => clearInterval(t);
+  }, [activeSession]);
+
+  const nav = [
+    {id:"dashboard",icon:"⬡",label:"Dashboard"},
+    {id:"sessions",icon:"◈",label:"Sessões"},
+    {id:"engine",icon:"⚡",label:"Engine"},
+    {id:"clients",icon:"◎",label:"Clientes"},
+    {id:"reports",icon:"▦",label:"Relatórios"},
+    {id:"ai",icon:"✦",label:"IA"},
+  ];
+
+  const TABLES = [
+    {slug:"hado-quantum",name:"Hado Quantum",color:"#6366f1",glyph:"◈"},
+    {slug:"frequencies",name:"Frequências",color:"#ec4899",glyph:"⟁"},
+    {slug:"chakras",name:"Chakras",color:"#10b981",glyph:"✦"},
+    {slug:"radionica",name:"Radiônica",color:"#f59e0b",glyph:"⊕"},
+    {slug:"multidimensional",name:"Multidimensional",color:"#06b6d4",glyph:"⬡"},
+  ];
+
+  async function handleGeneratePDF(session) {
+    setGenPdf(true);
+    await generateReportPDF({
+      client:    { name: session.client_name },
+      therapist: { name: user.name, registration: "RQH-00000" },
+      session:   { table: session.table_name, duration: session.duration, bpm: session.bpm||72, hrv: session.hrv||48 },
+      chakras:   session.chakras || [],
+      coherence: session.coherence || 82,
+      notes:     session.notes,
+      date:      session.scheduled_at ? new Date(session.scheduled_at).toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"}) : "—",
+    });
+    setGenPdf(false);
+  }
+
+  async function handleAI(prompt) {
+    setAiLoading(true); setAiOutput("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          system:"Você é uma IA supervisora de sessões terapêuticas do AXIS CORE™. Analise dados e gere insights profissionais. Sempre inclua disclaimer de que é ferramenta complementar e não substitui acompanhamento médico.",
+          messages:[{role:"user",content:prompt}],
+        }),
+      });
+      const data = await res.json();
+      setAiOutput(data.content?.[0]?.text || "Sem resposta.");
+    } catch(e) {
+      setAiOutput("Erro ao chamar IA: " + e.message + "\n\nConfigure a API key para usar esta função.");
+    }
+    setAiLoading(false);
+  }
+
+  function renderPage() {
+    // Dashboard
+    if (page === "dashboard") return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:16 }}>
+        <div>
+          <h1 style={{ fontSize:20, fontWeight:700, color:"#fff" }}>Bom dia, {user.name.split(" ")[0]} ✦</h1>
+          <p style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)", marginTop:4 }}>AXIS CORE™ · Painel Terapeuta</p>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+          {[
+            {l:"Clientes",v:clients.length,c:"#06b6d4"},
+            {l:"Sessões",v:sessions.length,c:"#6366f1"},
+            {l:"Hoje",v:1,c:"#10b981"},
+            {l:"Mesas",v:TABLES.length,c:"#f59e0b"},
+          ].map(s=>(
+            <div key={s.l} style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"16px 18px" }}>
+              <div style={{ fontSize:10, fontFamily:"monospace", color:"rgba(255,255,255,0.35)", marginBottom:8, letterSpacing:"0.06em" }}>{s.l.toUpperCase()}</div>
+              <div style={{ fontSize:28, fontWeight:700, color:s.c }}>{s.v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:18 }}>
+          <div style={{ fontSize:12, fontFamily:"monospace", color:"rgba(255,255,255,0.35)", marginBottom:12 }}>PRÓXIMAS SESSÕES</div>
+          {sessions.filter(s=>s.status!=="cancelled").slice(0,3).map(s=>(
+            <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+              <div>
+                <div style={{ fontSize:13, color:"#fff", marginBottom:2 }}>{s.client_name}</div>
+                <div style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)" }}>{s.table_name} · {s.scheduled_at?new Date(s.scheduled_at).toLocaleString("pt-BR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</div>
+              </div>
+              <span style={{ fontFamily:"monospace", fontSize:10, padding:"3px 9px", borderRadius:99,
+                background:s.status==="in_progress"?"rgba(74,222,128,0.15)":s.status==="completed"?"rgba(99,102,241,0.15)":"rgba(255,255,255,0.05)",
+                border:`1px solid ${s.status==="in_progress"?"rgba(74,222,128,0.3)":s.status==="completed"?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.1)"}`,
+                color:s.status==="in_progress"?"#4ade80":s.status==="completed"?"#a5b4fc":"rgba(255,255,255,0.4)",
+              }}>
+                {s.status==="in_progress"?"● Ao Vivo":s.status==="completed"?"Concluída":"Agendada"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    // Sessions
+    if (page === "sessions") return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <h2 style={{ fontSize:18, fontWeight:700, color:"#fff" }}>Sessões</h2>
+        </div>
+        {activeSession ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:600, color:"#fff" }}>Sessão Ativa — {activeSession.client_name}</div>
+                <div style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.3)" }}>{activeSession.table_name}</div>
+              </div>
+              <button onClick={()=>{setSessions(p=>p.map(s=>s.id===activeSession.id?{...s,status:"completed"}:s));setActiveSession(null);}} style={{ padding:"8px 16px", background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.3)", color:"#f87171", fontFamily:"monospace", fontSize:11, borderRadius:8, cursor:"pointer" }}>
+                ⏹ Encerrar
+              </button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              {[{l:"BPM",v:bpm.toFixed(0),c:"#ef4444"},{l:"Coerência",v:coherence.toFixed(0)+"%",c:"#10b981"},{l:"HRV",v:"48 ms",c:"#6366f1"},{l:"Stress",v:"24%",c:"#f59e0b"}].map(m=>(
+                <div key={m.l} style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, padding:"14px 16px", textAlign:"center" }}>
+                  <div style={{ fontSize:28, fontWeight:700, color:m.c }}>{m.v}</div>
+                  <div style={{ fontSize:10, fontFamily:"monospace", color:"rgba(255,255,255,0.35)", marginTop:4 }}>{m.l.toUpperCase()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          sessions.map(s => (
+            <div key={s.id} style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:600, color:"#fff", marginBottom:3 }}>{s.client_name}</div>
+                <div style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)" }}>
+                  {s.table_name} · {s.scheduled_at?new Date(s.scheduled_at).toLocaleString("pt-BR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                {s.status==="completed" && (
+                  <button onClick={()=>handleGeneratePDF(s)} disabled={genPdf} style={{ padding:"6px 12px", background:"rgba(99,102,241,0.15)", border:"1px solid rgba(99,102,241,0.3)", color:"#a5b4fc", fontFamily:"monospace", fontSize:10, borderRadius:6, cursor:"pointer" }}>
+                    {genPdf?<Spinner size={12} />:"▦ PDF"}
+                  </button>
+                )}
+                {s.status==="scheduled" && (
+                  <button onClick={()=>{setSessions(p=>p.map(x=>x.id===s.id?{...x,status:"in_progress"}:x));setActiveSession(s);}} style={{ padding:"6px 12px", background:"rgba(74,222,128,0.15)", border:"1px solid rgba(74,222,128,0.3)", color:"#4ade80", fontFamily:"monospace", fontSize:10, borderRadius:6, cursor:"pointer" }}>
+                    ▶ Iniciar
+                  </button>
+                )}
+                <span style={{ fontFamily:"monospace", fontSize:10, padding:"3px 9px", borderRadius:99,
+                  background:s.status==="in_progress"?"rgba(74,222,128,0.1)":s.status==="completed"?"rgba(99,102,241,0.1)":"rgba(255,255,255,0.04)",
+                  color:s.status==="in_progress"?"#4ade80":s.status==="completed"?"#a5b4fc":"rgba(255,255,255,0.4)",
+                  border:`1px solid ${s.status==="in_progress"?"rgba(74,222,128,0.25)":s.status==="completed"?"rgba(99,102,241,0.25)":"rgba(255,255,255,0.08)"}`,
+                }}>
+                  {s.status==="in_progress"?"● Ao Vivo":s.status==="completed"?"Concluída":"Agendada"}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    );
+
+    // Engine
+    if (page === "engine") return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:14 }}>
+        <h2 style={{ fontSize:18, fontWeight:700, color:"#fff" }}>Engine AXIS™</h2>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          {TABLES.map(t => (
+            <div key={t.slug} style={{ background:"rgba(15,17,26,0.8)", border:`1px solid ${t.color}22`, borderRadius:10, padding:"16px 18px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontSize:20, color:t.color }}>{t.glyph}</span>
+                  <div>
+                    <div style={{ fontSize:13, color:"#fff" }}>{t.name}</div>
+                    <div style={{ fontSize:10, fontFamily:"monospace", color:"rgba(255,255,255,0.3)" }}>{t.slug}</div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>setEngineRunning(t.slug)} style={{ flex:1, padding:"7px", background:`${t.color}15`, border:`1px solid ${t.color}33`, color:t.color, fontFamily:"monospace", fontSize:10, borderRadius:6, cursor:"pointer" }}>
+                  {engineRunning===t.slug?"⏹ Parar":"▶ Iniciar"}
+                </button>
+                <button style={{ padding:"7px 12px", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.4)", fontFamily:"monospace", fontSize:10, borderRadius:6, cursor:"pointer" }}>
+                  Status
+                </button>
+              </div>
+              {engineRunning===t.slug && (
+                <div style={{ marginTop:8, padding:"6px 10px", background:`${t.color}10`, borderRadius:6, fontFamily:"monospace", fontSize:10, color:t.color }}>
+                  ● MQTT axis/{t.slug}/start — em execução
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    // Reports
+    if (page === "reports") return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:14 }}>
+        <h2 style={{ fontSize:18, fontWeight:700, color:"#fff" }}>Relatórios</h2>
+        <div style={{ background:"rgba(99,102,241,0.08)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:10, padding:16, fontFamily:"monospace", fontSize:12, color:"#a5b4fc" }}>
+          ✦ Clique em "▦ PDF" em qualquer sessão concluída para gerar o relatório completo.<br/>
+          O PDF abre em nova aba com visualização e opção de impressão/download.
+        </div>
+        {sessions.filter(s=>s.status==="completed").map(s=>(
+          <div key={s.id} style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:14, color:"#fff", marginBottom:3 }}>{s.client_name}</div>
+              <div style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)" }}>
+                {s.table_name} · {s.scheduled_at?new Date(s.scheduled_at).toLocaleDateString("pt-BR",{day:"numeric",month:"long"}):"—"} · {s.duration}min · Coerência {s.coherence}%
+              </div>
+            </div>
+            <button onClick={()=>handleGeneratePDF(s)} disabled={genPdf} style={{ padding:"8px 16px", background:"rgba(99,102,241,0.15)", border:"1px solid rgba(99,102,241,0.3)", color:"#a5b4fc", fontFamily:"monospace", fontSize:11, borderRadius:8, cursor:"pointer", display:"flex", gap:6, alignItems:"center" }}>
+              {genPdf?<><Spinner size={12} color="#a5b4fc"/>Gerando...</>:"⬇ Gerar PDF"}
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+
+    // AI
+    if (page === "ai") return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:14 }}>
+        <h2 style={{ fontSize:18, fontWeight:700, color:"#fff" }}>IA Supervisora <span style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.3)" }}>Claude · Anthropic</span></h2>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>
+          {[
+            {label:"Analisar Sessão",   prompt:`Analise esta sessão terapêutica:\nCliente: Maria Silva\nMesa: Hado Quantum\nCoerência: 84%\nBPM médio: 72\nHRV: 48ms\nNotas: Sessão muito positiva, boa resposta energética.\nGere análise detalhada e recomendações.`},
+            {label:"Sugerir Protocolo", prompt:`Com base no perfil desta cliente:\nMaria Silva, 35 anos, 5 sessões realizadas, coerência média 81%, campo cardíaco predominante.\nSugira protocolo específico para próxima sessão usando o AXIS CORE™.`},
+            {label:"Gerar Relatório",   prompt:`Gere um relatório profissional de sessão:\nCliente: Maria Silva\nMesa: Hado Quantum · 62min\nCoerência: 84% · BPM: 72 · HRV: 48ms\nChakra cardíaco em destaque (88%)\nFormate profissionalmente com resumo, análise e recomendações.`},
+            {label:"Recomendações",     prompt:`Baseado no histórico de 5 sessões da cliente Maria Silva com coerência crescente (71%→84%), sugira: frequência de sessões, complementos, próximos passos e alertas.`},
+          ].map(a=>(
+            <button key={a.label} onClick={()=>handleAI(a.prompt)} style={{ padding:"10px 14px", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.25)", color:"#a5b4fc", fontFamily:"monospace", fontSize:11, borderRadius:8, cursor:"pointer", textAlign:"left" }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+        {aiLoading && (
+          <div style={{ display:"flex", gap:10, alignItems:"center", padding:16, background:"rgba(99,102,241,0.08)", borderRadius:10, color:"rgba(255,255,255,0.4)", fontFamily:"monospace", fontSize:12 }}>
+            <Spinner /> Gerando análise com IA...
+          </div>
+        )}
+        {aiOutput && (
+          <div style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:10, padding:18 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.3)" }}>RESPOSTA DA IA</span>
+              <button onClick={()=>navigator.clipboard.writeText(aiOutput)} style={{ fontFamily:"monospace", fontSize:10, background:"transparent", border:"1px solid rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.4)", padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>Copiar</button>
+            </div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.8, whiteSpace:"pre-wrap", maxHeight:360, overflowY:"auto" }}>
+              {aiOutput}
+            </div>
+          </div>
+        )}
+        {!aiLoading && !aiOutput && (
+          <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.2)", fontFamily:"monospace", fontSize:12 }}>
+            Selecione uma ação acima para consultar a IA Supervisora.
+          </div>
+        )}
+      </div>
+    );
+
+    // Clients
+    return (
+      <div style={{ padding:24, display:"flex", flexDirection:"column", gap:12 }}>
+        <h2 style={{ fontSize:18, fontWeight:700, color:"#fff" }}>Clientes</h2>
+        {clients.map(c=>(
+          <div key={c.id} style={{ background:"rgba(15,17,26,0.8)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, padding:"14px 16px", display:"flex", alignItems:"center", gap:14 }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(99,102,241,0.2)", border:"1px solid rgba(99,102,241,0.4)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:"#a5b4fc", flexShrink:0 }}>
+              {c.full_name[0]}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:"#fff" }}>{c.full_name}</div>
+              <div style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)" }}>{c.email} · {c.phone}</div>
+            </div>
+            <span style={{ fontFamily:"monospace", fontSize:10, color:"#4ade80", background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.25)", padding:"3px 9px", borderRadius:99 }}>Ativo</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080a0f", color:"#fff", display:"flex" }}>
+      {/* Sidebar */}
+      <aside style={{ width:56, background:"#08090d", borderRight:"1px solid rgba(255,255,255,0.06)", display:"flex", flexDirection:"column", alignItems:"center", padding:"16px 0", gap:4, flexShrink:0 }}>
+        <div style={{ marginBottom:14, color:"#c8a97e", fontSize:16, fontFamily:"Georgia,serif", fontWeight:700 }}>AX</div>
+        {nav.map(n=>(
+          <button key={n.id} onClick={()=>setPage(n.id)} title={n.label} style={{ width:40, height:40, borderRadius:10, border:"none", cursor:"pointer", fontSize:16, transition:"all 0.2s", background:page===n.id?"rgba(99,102,241,0.2)":"transparent", color:page===n.id?"#a5b4fc":"rgba(255,255,255,0.25)", boxShadow:page===n.id?"inset 0 0 0 1px rgba(99,102,241,0.35)":"none" }}>
+            {n.icon}
+          </button>
+        ))}
+        <div style={{ flex:1 }} />
+        <div style={{ width:30, height:30, borderRadius:"50%", background:"rgba(99,102,241,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:"#a5b4fc", marginBottom:4 }}>
+          {user.name[0]}
+        </div>
+        <button onClick={onSignOut} title="Sair" style={{ width:32, height:32, borderRadius:8, border:"none", cursor:"pointer", fontSize:13, color:"rgba(255,255,255,0.2)", background:"transparent" }}>⏻</button>
+      </aside>
+
+      {/* Header + content */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        <div style={{ height:52, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 24px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0 }}>
+          <span style={{ fontSize:15, fontWeight:600 }}>{nav.find(n=>n.id===page)?.label || "Dashboard"}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#4ade80", boxShadow:"0 0 6px #4ade80" }} />
+            <span style={{ fontSize:11, fontFamily:"monospace", color:"rgba(255,255,255,0.35)" }}>{user.name}</span>
+          </div>
+        </div>
+        <div style={{ flex:1, overflowY:"auto" }}>{renderPage()}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CLIENT PANEL (minimal — full version in AxisCoreClient.jsx) ───────────────
+function ClientPanel({ user, onSignOut }) {
+  const [tab, setTab] = useState("home");
+  const tabs = [{id:"home",icon:"✦",l:"Início"},{id:"chakras",icon:"◎",l:"Campo"},{id:"history",icon:"◈",l:"Histórico"},{id:"reports",icon:"▦",l:"Relatórios"}];
+
+  return (
+    <div style={{ minHeight:"100vh", maxWidth:480, margin:"0 auto", background:"#07060f", color:"rgba(230,220,255,0.85)" }}>
+      <div style={{ padding:"28px 20px 90px" }}>
+        <div style={{ marginBottom:24 }}>
+          <p style={{ fontFamily:"monospace", fontSize:10, color:"rgba(180,157,255,0.4)", letterSpacing:"0.12em", marginBottom:4 }}>BOM DIA ✦</p>
+          <h1 style={{ fontFamily:"'Georgia',serif", fontSize:28, fontWeight:300, lineHeight:1.2 }}>
+            {user.name.split(" ")[0]},<br/><em style={{ color:"#b49dff" }}>seu campo energético</em>
+          </h1>
+        </div>
+
+        {tab==="home" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ background:"rgba(180,157,255,0.08)", border:"1px solid rgba(180,157,255,0.15)", borderRadius:14, padding:20 }}>
+              <p style={{ fontFamily:"monospace", fontSize:10, color:"rgba(180,157,255,0.4)", letterSpacing:"0.12em", marginBottom:8 }}>PRÓXIMA SESSÃO</p>
+              <p style={{ fontFamily:"'Georgia',serif", fontSize:18, color:"rgba(230,220,255,0.9)" }}>Sábado, 31 de Maio</p>
+              <p style={{ fontFamily:"monospace", fontSize:13, color:"#b49dff", marginTop:4 }}>14:00 · Marcia Britto RQH</p>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+              {[{l:"Sessões",v:"12",c:"#b49dff"},{l:"Coerência",v:"84%",c:"#2dd4bf"},{l:"Frequência",v:"528Hz",c:"#e8c87a"}].map(s=>(
+                <div key={s.l} style={{ background:"rgba(17,15,36,0.7)", border:"1px solid rgba(180,157,255,0.08)", borderRadius:12, padding:"14px 10px", textAlign:"center" }}>
+                  <div style={{ fontFamily:"'Georgia',serif", fontSize:22, color:s.c, marginBottom:3 }}>{s.v}</div>
+                  <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(230,220,255,0.2)" }}>{s.l.toUpperCase()}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background:"rgba(139,92,246,0.06)", border:"1px solid rgba(180,157,255,0.08)", borderRadius:12, padding:18, textAlign:"center" }}>
+              <p style={{ fontFamily:"monospace", fontSize:9, color:"rgba(180,157,255,0.4)", letterSpacing:"0.12em", marginBottom:8 }}>AFIRMAÇÃO · CHAKRA CARDÍACO</p>
+              <p style={{ fontFamily:"'Georgia',serif", fontSize:17, fontStyle:"italic", lineHeight:1.6 }}>"Eu amo e sou amado."</p>
+            </div>
+          </div>
+        )}
+        {tab==="chakras" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ background:"rgba(17,15,36,0.7)", border:"1px solid rgba(180,157,255,0.08)", borderRadius:12, padding:20 }}>
+              <p style={{ fontFamily:"monospace", fontSize:10, color:"rgba(180,157,255,0.35)", marginBottom:14 }}>CAMPO ENERGÉTICO · ÚLTIMA SESSÃO</p>
+              {[{n:"Raiz",v:75,c:"#ef4444"},{n:"Sacral",v:68,c:"#f97316"},{n:"Plexo Solar",v:80,c:"#eab308"},{n:"Cardíaco",v:88,c:"#22c55e"},{n:"Laríngeo",v:72,c:"#3b82f6"},{n:"Frontal",v:70,c:"#8b5cf6"},{n:"Coronário",v:76,c:"#ec4899"}].map(c=>(
+                <div key={c.n} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div style={{ width:8, height:8, borderRadius:"50%", background:c.c, flexShrink:0 }} />
+                  <span style={{ fontFamily:"monospace", fontSize:11, color:"rgba(230,220,255,0.45)", width:80 }}>{c.n}</span>
+                  <div style={{ flex:1, height:3, background:"rgba(255,255,255,0.05)", borderRadius:99 }}>
+                    <div style={{ height:"100%", width:`${c.v}%`, background:c.c, borderRadius:99 }} />
+                  </div>
+                  <span style={{ fontFamily:"monospace", fontSize:11, color:c.c, width:30 }}>{c.v}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab==="history" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {[{t:"Mesa Hado Quantum",d:"28/05/2025",dur:"62min",coh:84},{t:"Mesa de Frequências",d:"14/05/2025",dur:"55min",coh:79},{t:"Mesa de Chakras",d:"30/04/2025",dur:"68min",coh:88}].map((s,i)=>(
+              <div key={i} style={{ background:"rgba(17,15,36,0.7)", border:"1px solid rgba(180,157,255,0.08)", borderRadius:12, padding:"14px 16px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <div>
+                    <div style={{ fontFamily:"'Georgia',serif", fontSize:14, color:"rgba(230,220,255,0.85)", marginBottom:3 }}>{s.t}</div>
+                    <div style={{ fontFamily:"monospace", fontSize:10, color:"rgba(230,220,255,0.3)" }}>{s.d} · {s.dur}</div>
+                  </div>
+                  <span style={{ fontFamily:"monospace", fontSize:11, color:"#2dd4bf" }}>{s.coh}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {tab==="reports" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {[{t:"Mesa Hado Quantum",d:"28/05/2025"},{t:"Mesa de Frequências",d:"14/05/2025"},{t:"Mesa de Chakras",d:"30/04/2025"}].map((r,i)=>(
+              <div key={i} style={{ background:"rgba(17,15,36,0.7)", border:"1px solid rgba(180,157,255,0.08)", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontFamily:"'Georgia',serif", fontSize:14, color:"rgba(230,220,255,0.85)", marginBottom:3 }}>{r.t}</div>
+                  <div style={{ fontFamily:"monospace", fontSize:10, color:"rgba(230,220,255,0.3)" }}>{r.d}</div>
+                </div>
+                <button onClick={()=>generateReportPDF({client:{name:user.name},therapist:{name:"Marcia Britto RQH"},session:{table:r.t,duration:62,bpm:72,hrv:48},coherence:84,notes:"Sessão positiva.",date:r.d})} style={{ fontFamily:"monospace", fontSize:10, padding:"6px 12px", background:"rgba(180,157,255,0.1)", border:"1px solid rgba(180,157,255,0.25)", color:"#b49dff", borderRadius:8, cursor:"pointer" }}>
+                  ⬇ PDF
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:"rgba(7,6,15,0.94)", backdropFilter:"blur(20px)", borderTop:"1px solid rgba(180,157,255,0.08)", display:"flex", justifyContent:"space-around", padding:"10px 0 14px" }}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", padding:"4px 16px" }}>
+            <span style={{ fontSize:18, color:tab===t.id?"#b49dff":"rgba(230,220,255,0.2)" }}>{t.icon}</span>
+            <span style={{ fontFamily:"monospace", fontSize:9, color:tab===t.id?"#b49dff":"rgba(230,220,255,0.2)", letterSpacing:"0.08em" }}>{t.l.toUpperCase()}</span>
+            {tab===t.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#b49dff" }} />}
+          </button>
+        ))}
+        <button onClick={onSignOut} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", padding:"4px 12px" }}>
+          <span style={{ fontSize:18, color:"rgba(230,220,255,0.2)" }}>⏻</span>
+          <span style={{ fontFamily:"monospace", fontSize:9, color:"rgba(230,220,255,0.2)", letterSpacing:"0.08em" }}>SAIR</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── STUDENT PANEL (minimal — full version in AxisCoreStudent.jsx) ─────────────
+function StudentPanel({ user, onSignOut }) {
+  const [tab, setTab] = useState("library");
+  const courses = [
+    {id:1,title:"Fundamentos do Campo Quântico",progress:100,modules:8,done:8,level:"Iniciante",color:"#1a6b5a",cert:true},
+    {id:2,title:"Engine Multidimensional",progress:67,modules:12,done:8,level:"Intermediário",color:"#c4962a",cert:false},
+    {id:3,title:"IA Supervisora",progress:0,modules:10,done:0,level:"Avançado",color:"#8b2635",cert:false,locked:true},
+    {id:4,title:"Radiônica & Ancestralidade",progress:0,modules:14,done:0,level:"Avançado",color:"#5a3a7e",cert:false,locked:true},
+  ];
+  const [certCourse, setCertCourse] = useState(null);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#f5f0e8", color:"#2c2416", display:"flex" }}>
+      {/* Sidebar */}
+      <div style={{ width:180, background:"linear-gradient(to bottom,#2c2416,#1a1408)", borderRight:"1px solid rgba(196,150,42,0.2)", display:"flex", flexDirection:"column", flexShrink:0 }}>
+        <div style={{ padding:"22px 18px 16px", borderBottom:"1px solid rgba(196,150,42,0.15)" }}>
+          <div style={{ fontFamily:"'Georgia',serif", fontSize:13, color:"#c4962a", letterSpacing:"0.2em", marginBottom:2 }}>AXIS</div>
+          <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(196,150,42,0.5)", letterSpacing:"0.15em" }}>CORE™ · ACADEMIA</div>
+        </div>
+        <div style={{ padding:"12px 10px", flex:1 }}>
+          {[{id:"library",l:"Biblioteca"},{id:"courses",l:"Meus Cursos"},{id:"certs",l:"Certificados"}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{ width:"100%", padding:"9px 12px", marginBottom:2, display:"flex", alignItems:"center", gap:8, background:tab===t.id?"rgba(196,150,42,0.12)":"transparent", border:`1px solid ${tab===t.id?"rgba(196,150,42,0.3)":"transparent"}`, borderRadius:3, cursor:"pointer", textAlign:"left" }}>
+              <span style={{ fontFamily:"'Georgia',serif", fontSize:12, color:tab===t.id?"#f5f0e8":"rgba(196,150,42,0.6)" }}>{t.l}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={onSignOut} style={{ padding:"12px 18px", background:"transparent", border:"none", color:"rgba(196,150,42,0.4)", fontFamily:"monospace", fontSize:10, cursor:"pointer", borderTop:"1px solid rgba(196,150,42,0.15)", textAlign:"left" }}>
+          ← SAIR
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex:1, overflowY:"auto", padding:"28px 32px" }}>
+        {/* Certificate modal */}
+        {certCourse && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(44,36,22,0.85)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }} onClick={()=>setCertCourse(null)}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:"linear-gradient(135deg,#f5f0e8,#ede6d6)", border:"3px double rgba(196,150,42,0.4)", padding:"36px 44px", maxWidth:600, width:"100%", position:"relative" }}>
+              <div style={{ position:"absolute", top:10, left:10, width:20, height:20, borderTop:"2px solid rgba(196,150,42,0.4)", borderLeft:"2px solid rgba(196,150,42,0.4)" }} />
+              <div style={{ position:"absolute", top:10, right:10, width:20, height:20, borderTop:"2px solid rgba(196,150,42,0.4)", borderRight:"2px solid rgba(196,150,42,0.4)" }} />
+              <div style={{ position:"absolute", bottom:10, left:10, width:20, height:20, borderBottom:"2px solid rgba(196,150,42,0.4)", borderLeft:"2px solid rgba(196,150,42,0.4)" }} />
+              <div style={{ position:"absolute", bottom:10, right:10, width:20, height:20, borderBottom:"2px solid rgba(196,150,42,0.4)", borderRight:"2px solid rgba(196,150,42,0.4)" }} />
+              <div style={{ border:"1px solid rgba(196,150,42,0.3)", padding:"24px 28px", textAlign:"center" }}>
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:11, color:"#c4962a", letterSpacing:"0.3em", marginBottom:6 }}>AXIS CORE™ · ACADEMIA</div>
+                <div style={{ height:1, background:"rgba(196,150,42,0.3)", margin:"8px 0" }} />
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:20, color:"#2c2416", letterSpacing:"0.08em", marginBottom:6 }}>Certificado de Conclusão</div>
+                <div style={{ height:1, background:"rgba(196,150,42,0.3)", margin:"8px 0 16px" }} />
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:13, fontStyle:"italic", color:"#8b7355", marginBottom:8 }}>Certificamos que</div>
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:22, color:"#2c2416", marginBottom:8 }}>{user.name}</div>
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:13, fontStyle:"italic", color:"#8b7355", marginBottom:6 }}>concluiu com aproveitamento</div>
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:16, color:"#c4962a" }}>{certCourse.title}</div>
+                <div style={{ height:1, background:"rgba(139,115,85,0.25)", margin:"16px 0 10px" }} />
+                <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(139,115,85,0.5)", letterSpacing:"0.1em" }}>
+                  ID: AXIS-{certCourse.id}-{user.name.replace(/\s/g,"").toUpperCase().slice(0,4)}-2025
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, justifyContent:"center", marginTop:16 }}>
+                <button style={{ fontFamily:"monospace", fontSize:10, padding:"7px 18px", background:"rgba(196,150,42,0.12)", border:"1px solid rgba(196,150,42,0.3)", color:"#c4962a", cursor:"pointer" }}>⬇ BAIXAR PDF</button>
+                <button onClick={()=>setCertCourse(null)} style={{ fontFamily:"monospace", fontSize:10, padding:"7px 18px", background:"rgba(44,36,22,0.08)", border:"1px solid rgba(139,115,85,0.3)", color:"#8b7355", cursor:"pointer" }}>FECHAR</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontFamily:"monospace", fontSize:10, color:"#8b7355", letterSpacing:"0.18em", marginBottom:6 }}>{tab==="library"?"CATÁLOGO DE CURSOS":tab==="courses"?"EM APRENDIZADO":"CONQUISTAS ACADÊMICAS"}</div>
+          <h1 style={{ fontFamily:"'Georgia',serif", fontSize:24, color:"#2c2416" }}>{tab==="library"?"Biblioteca":tab==="courses"?"Meus Cursos":"Certificados"}</h1>
+          <div style={{ height:1, background:"linear-gradient(to right,rgba(196,150,42,0.5),transparent)", margin:"10px 0" }} />
+        </div>
+
+        {tab !== "certs" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {courses.filter(c=>tab==="library"||c.progress>0).map(c=>(
+              <div key={c.id} style={{ background:"linear-gradient(135deg,#f5f0e8,#ede6d6)", border:"1px solid rgba(139,115,85,0.25)", padding:"18px 20px", opacity:c.locked?0.55:1, boxShadow:"0 2px 8px rgba(44,36,22,0.08)" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:"'Georgia',serif", fontSize:16, color:"#2c2416", marginBottom:4 }}>{c.title}</div>
+                    <div style={{ fontFamily:"monospace", fontSize:10, color:"#8b7355" }}>{c.done}/{c.modules} módulos · {c.level}{c.locked?" · 🔒 BLOQUEADO":""}</div>
+                  </div>
+                  <div style={{ fontFamily:"'Georgia',serif", fontSize:20, color:c.color, marginLeft:12 }}>{c.progress}%</div>
+                </div>
+                <div style={{ height:3, background:"rgba(139,115,85,0.15)", marginBottom:10 }}>
+                  <div style={{ height:"100%", width:`${c.progress}%`, background:c.color }} />
+                </div>
+                {c.cert && (
+                  <button onClick={()=>setCertCourse(c)} style={{ fontFamily:"monospace", fontSize:10, padding:"6px 14px", background:"rgba(196,150,42,0.12)", border:"1px solid rgba(196,150,42,0.3)", color:"#c4962a", cursor:"pointer", borderRadius:2 }}>
+                    ✦ VER CERTIFICADO
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "certs" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {courses.filter(c=>c.cert).map(c=>(
+              <div key={c.id} style={{ background:"linear-gradient(135deg,#f5f0e8,#ede6d6)", border:"2px solid rgba(196,150,42,0.35)", padding:"20px 24px", boxShadow:"0 2px 12px rgba(44,36,22,0.12)" }}>
+                <div style={{ marginBottom:12, fontFamily:"'Georgia',serif", fontSize:16, color:"#2c2416" }}>{c.title}</div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={()=>setCertCourse(c)} style={{ fontFamily:"monospace", fontSize:10, padding:"7px 16px", background:"rgba(196,150,42,0.12)", border:"1px solid rgba(196,150,42,0.3)", color:"#c4962a", cursor:"pointer" }}>
+                    ✦ VISUALIZAR
+                  </button>
+                  <button style={{ fontFamily:"monospace", fontSize:10, padding:"7px 16px", background:"rgba(139,115,85,0.08)", border:"1px solid rgba(139,115,85,0.25)", color:"#8b7355", cursor:"pointer" }}>
+                    ↗ COMPARTILHAR
+                  </button>
+                </div>
+              </div>
+            ))}
+            {courses.filter(c=>!c.cert&&!c.locked).map(c=>(
+              <div key={c.id} style={{ padding:"14px 18px", border:"1px solid rgba(139,115,85,0.15)", opacity:0.6 }}>
+                <div style={{ fontFamily:"'Georgia',serif", fontSize:14, color:"#4a3f2e", marginBottom:4 }}>{c.title}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ flex:1, height:2, background:"rgba(139,115,85,0.15)" }}>
+                    <div style={{ height:"100%", width:`${c.progress}%`, background:c.color }} />
+                  </div>
+                  <span style={{ fontFamily:"monospace", fontSize:10, color:"#8b7355" }}>{c.progress}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT APP ─────────────────────────────────────────────────────────────────
+export default function AxisCoreUnified() {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("axis_user")); } catch { return null; }
+  });
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    // Verifica token existente
+    const token = localStorage.getItem("axis_token");
+    const savedUser = localStorage.getItem("axis_user");
+    if (token && savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch { localStorage.clear(); }
+    }
+    setAuthChecked(true);
+  }, []);
+
+  function handleAuth(u) { setUser(u); }
+
+  function handleSignOut() {
+    localStorage.removeItem("axis_token");
+    localStorage.removeItem("axis_user");
+    setUser(null);
+  }
+
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#080a0f", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <Spinner color="#6366f1" size={28} />
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen onAuth={handleAuth} />;
+
+  return (
+    <AuthContext.Provider value={{ user, signOut: handleSignOut }}>
+      <RoleRouter user={user} onSignOut={handleSignOut} />
+    </AuthContext.Provider>
+  );
+}
