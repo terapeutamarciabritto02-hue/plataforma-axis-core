@@ -1,0 +1,1118 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+const T = {
+  bg:       "#040507",
+  bg1:      "#08090d",
+  bg2:      "#0d0f15",
+  bg3:      "#12151e",
+  border:   "rgba(0,255,128,0.08)",
+  border2:  "rgba(0,255,128,0.15)",
+  green:    "#00ff80",
+  greenDim: "rgba(0,255,128,0.5)",
+  greenFaint:"rgba(0,255,128,0.12)",
+  amber:    "#ffb800",
+  amberDim: "rgba(255,184,0,0.5)",
+  red:      "#ff4444",
+  redDim:   "rgba(255,68,68,0.5)",
+  blue:     "#00aaff",
+  blueDim:  "rgba(0,170,255,0.5)",
+  purple:   "#9966ff",
+  text:     "rgba(0,255,128,0.85)",
+  textDim:  "rgba(0,255,128,0.4)",
+  textFaint:"rgba(0,255,128,0.18)",
+  white:    "rgba(220,230,220,0.9)",
+  whiteDim: "rgba(220,230,220,0.4)",
+};
+
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+const MOCK_TENANTS = [
+  { id:"ten-001", name:"Instituto Luz Interior",  slug:"luz-interior",   plan:"pro",        therapists:3, clients:28, sessions:142, status:"active",   owner:"Marcia Britto",    created:"2024-11-01" },
+  { id:"ten-002", name:"Centro Equilíbrio Vital", slug:"equilibrio-vital",plan:"starter",   therapists:1, clients:12, sessions:54,  status:"active",   owner:"Roberto Alves",    created:"2024-12-15" },
+  { id:"ten-003", name:"Espaço Quantum Terapia",  slug:"quantum-terapia", plan:"enterprise",therapists:7, clients:91, sessions:380, status:"active",   owner:"Fernanda Costa",   created:"2024-09-20" },
+  { id:"ten-004", name:"Harmonia e Bem Estar",    slug:"harmonia-bem",    plan:"starter",   therapists:1, clients:5,  sessions:18,  status:"inactive", owner:"Carlos Mendes",    created:"2025-01-10" },
+  { id:"ten-005", name:"Terapias do Ser",         slug:"terapias-ser",    plan:"pro",        therapists:2, clients:34, sessions:167, status:"active",   owner:"Lucia Ferreira",   created:"2024-10-05" },
+];
+
+const MOCK_THERAPISTS = [
+  { id:"th-001", name:"Marcia Britto RQH",  email:"marcia@luz.com",     tenant:"Instituto Luz Interior",  registration:"M-50340-MT-BR", sessions:89,  clients:12, status:"active",  last_active:"Hoje 09:42"   },
+  { id:"th-002", name:"Roberto Alves",       email:"roberto@equi.com",   tenant:"Centro Equilíbrio Vital", registration:"R-12890-MT-BR", sessions:54,  clients:12, status:"active",  last_active:"Hoje 08:15"   },
+  { id:"th-003", name:"Fernanda Costa",      email:"fernanda@qt.com",    tenant:"Espaço Quantum Terapia",  registration:"F-78340-MT-BR", sessions:145, clients:32, status:"active",  last_active:"Ontem 17:30"  },
+  { id:"th-004", name:"Paulo Gomes",         email:"paulo@qt.com",       tenant:"Espaço Quantum Terapia",  registration:"P-45120-MT-BR", sessions:98,  clients:22, status:"active",  last_active:"Hoje 11:00"   },
+  { id:"th-005", name:"Lucia Ferreira",      email:"lucia@ser.com",      tenant:"Terapias do Ser",         registration:"L-33210-MT-BR", sessions:167, clients:34, status:"active",  last_active:"Hoje 10:30"   },
+  { id:"th-006", name:"Carlos Mendes",       email:"carlos@har.com",     tenant:"Harmonia e Bem Estar",    registration:"C-67890-MT-BR", sessions:18,  clients:5,  status:"inactive",last_active:"15/04/2025"   },
+  { id:"th-007", name:"Ana Lima",            email:"ana@luz.com",        tenant:"Instituto Luz Interior",  registration:"A-91230-MT-BR", sessions:32,  clients:9,  status:"active",  last_active:"Hoje 07:55"   },
+];
+
+const MOCK_AUDIT = [
+  { id:1,  ts:"2025-05-30 11:42:07", actor:"marcia@luz.com",   action:"session.start",      resource:"sess-8821", ip:"189.40.22.1",  status:"ok"  },
+  { id:2,  ts:"2025-05-30 11:38:14", actor:"admin@axiscore",   action:"tenant.update",      resource:"ten-003",   ip:"191.33.11.9",  status:"ok"  },
+  { id:3,  ts:"2025-05-30 11:30:00", actor:"roberto@equi.com", action:"session.create",     resource:"sess-8820", ip:"177.88.44.2",  status:"ok"  },
+  { id:4,  ts:"2025-05-30 11:15:22", actor:"unknown",          action:"auth.failed",        resource:"—",         ip:"45.77.123.88", status:"err" },
+  { id:5,  ts:"2025-05-30 11:10:05", actor:"fernanda@qt.com",  action:"engine.command",     resource:"hado-q",    ip:"189.40.88.3",  status:"ok"  },
+  { id:6,  ts:"2025-05-30 11:08:33", actor:"admin@axiscore",   action:"therapist.create",   resource:"th-007",    ip:"191.33.11.9",  status:"ok"  },
+  { id:7,  ts:"2025-05-30 10:55:44", actor:"paulo@qt.com",     action:"report.sign",        resource:"rep-441",   ip:"189.40.88.4",  status:"ok"  },
+  { id:8,  ts:"2025-05-30 10:44:12", actor:"unknown",          action:"auth.failed",        resource:"—",         ip:"45.77.123.88", status:"err" },
+  { id:9,  ts:"2025-05-30 10:33:58", actor:"lucia@ser.com",    action:"session.end",        resource:"sess-8815", ip:"177.22.99.5",  status:"ok"  },
+  { id:10, ts:"2025-05-30 10:20:01", actor:"admin@axiscore",   action:"plan.upgrade",       resource:"ten-001",   ip:"191.33.11.9",  status:"ok"  },
+  { id:11, ts:"2025-05-30 10:10:44", actor:"ana@luz.com",      action:"client.create",      resource:"cli-092",   ip:"189.40.22.5",  status:"ok"  },
+  { id:12, ts:"2025-05-30 09:58:22", actor:"system",           action:"backup.completed",   resource:"db-main",   ip:"—",            status:"ok"  },
+];
+
+const SESSIONS_CHART = [
+  { day:"24/05", count:28 }, { day:"25/05", count:34 }, { day:"26/05", count:19 },
+  { day:"27/05", count:42 }, { day:"28/05", count:38 }, { day:"29/05", count:51 },
+  { day:"30/05", count:23 },
+];
+
+const PLAN_DIST = [
+  { plan:"enterprise", count:1, color:T.amber  },
+  { plan:"pro",        count:2, color:T.green  },
+  { plan:"starter",    count:2, color:T.blueDim },
+];
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const fmt = {
+  num: n => n.toLocaleString("pt-BR"),
+  pct: n => `${n.toFixed(1)}%`,
+  uptime: () => {
+    const s = Math.floor(Date.now()/1000) % 86400;
+    return `${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor((s%3600)/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  },
+};
+
+// ─── UI ATOMS ─────────────────────────────────────────────────────────────────
+function Cell({ children, style={}, onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      background: T.bg1, border:`1px solid ${T.border}`,
+      padding:"14px 16px", ...style,
+      cursor: onClick ? "pointer" : "default",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function Label({ children, style={} }) {
+  return <span style={{ fontFamily:"monospace", fontSize:10, letterSpacing:"0.14em", color:T.textFaint, textTransform:"uppercase", ...style }}>{children}</span>;
+}
+
+function Num({ children, size=24, color=T.green, style={} }) {
+  return <span style={{ fontFamily:"monospace", fontSize:size, fontWeight:700, color, lineHeight:1, ...style }}>{children}</span>;
+}
+
+function StatusDot({ status }) {
+  const c = status==="active"||status==="ok" ? T.green : status==="inactive"||status==="err" ? T.red : T.amber;
+  return <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:c, boxShadow:`0 0 6px ${c}`, marginRight:6, flexShrink:0 }} />;
+}
+
+function Pill({ children, color=T.green }) {
+  return (
+    <span style={{
+      fontFamily:"monospace", fontSize:10, letterSpacing:"0.1em", padding:"2px 8px",
+      border:`1px solid ${color}44`, color, background:`${color}10`,
+    }}>
+      {children.toUpperCase()}
+    </span>
+  );
+}
+
+function THead({ cols }) {
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:cols, padding:"6px 12px", background:T.bg3, borderBottom:`1px solid ${T.border2}` }}>
+      {cols.split(" ").map((_,i,arr) => <div key={i} />)}
+    </div>
+  );
+}
+
+function Btn({ children, onClick, variant="primary", size="sm", disabled=false }) {
+  const styles = {
+    primary: { background:`${T.greenFaint}`, border:`1px solid ${T.green}44`, color:T.green },
+    ghost:   { background:"transparent", border:`1px solid ${T.border2}`, color:T.textDim },
+    danger:  { background:"rgba(255,68,68,0.08)", border:`1px solid ${T.red}44`, color:T.red },
+    amber:   { background:"rgba(255,184,0,0.08)", border:`1px solid ${T.amber}44`, color:T.amber },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      fontFamily:"monospace", fontSize:11, letterSpacing:"0.08em",
+      padding: size==="sm" ? "5px 12px" : "8px 18px",
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.4 : 1,
+      transition:"all 0.15s",
+      display:"inline-flex", alignItems:"center", gap:6,
+      ...styles[variant],
+    }}>
+      {children}
+    </button>
+  );
+}
+
+// ─── SCANLINE EFFECT ──────────────────────────────────────────────────────────
+function Scanlines() {
+  return (
+    <div style={{
+      position:"fixed", inset:0, pointerEvents:"none", zIndex:9999,
+      backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,128,0.012) 2px,rgba(0,255,128,0.012) 4px)",
+    }} />
+  );
+}
+
+// ─── SYSTEM STATUS BAR ────────────────────────────────────────────────────────
+function StatusBar({ clock }) {
+  const [uptime, setUptime] = useState(fmt.uptime());
+  useEffect(() => { const t = setInterval(()=>setUptime(fmt.uptime()), 1000); return ()=>clearInterval(t); }, []);
+
+  const services = [
+    { name:"API",      ok:true  },
+    { name:"SUPABASE", ok:true  },
+    { name:"MQTT",     ok:true  },
+    { name:"REDIS",    ok:true  },
+    { name:"WEBSOCKET",ok:true  },
+    { name:"BACKUP",   ok:true  },
+  ];
+
+  return (
+    <div style={{ height:28, background:T.bg3, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", padding:"0 16px", gap:24, flexShrink:0 }}>
+      <span style={{ fontFamily:"monospace", fontSize:10, color:T.green, letterSpacing:"0.14em" }}>
+        AXIS CORE™ · ADMIN · v1.0.0
+      </span>
+      <div style={{ flex:1, display:"flex", gap:16 }}>
+        {services.map(s => (
+          <span key={s.name} style={{ fontFamily:"monospace", fontSize:10, color: s.ok ? T.greenDim : T.red, letterSpacing:"0.1em", display:"flex", alignItems:"center", gap:4 }}>
+            <StatusDot status={s.ok?"active":"inactive"} />
+            {s.name}
+          </span>
+        ))}
+      </div>
+      <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>
+        UPTIME {uptime} · {clock}
+      </span>
+    </div>
+  );
+}
+
+// ─── TOP NAV ──────────────────────────────────────────────────────────────────
+const SECTIONS = [
+  { id:"overview",    label:"OVERVIEW",    icon:"⬡" },
+  { id:"tenants",     label:"TENANTS",     icon:"◎" },
+  { id:"therapists",  label:"TERAPEUTAS",  icon:"◈" },
+  { id:"sessions",    label:"SESSÕES",     icon:"∿" },
+  { id:"engine",      label:"ENGINE",      icon:"⚡" },
+  { id:"audit",       label:"AUDITORIA",   icon:"▦" },
+  { id:"analytics",   label:"ANALYTICS",   icon:"∆" },
+  { id:"system",      label:"SISTEMA",     icon:"⌘" },
+];
+
+function TopNav({ active, onChange, adminEmail }) {
+  return (
+    <div style={{ height:44, background:T.bg1, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", flexShrink:0 }}>
+      {/* Logo zone */}
+      <div style={{ width:180, padding:"0 16px", borderRight:`1px solid ${T.border}`, flexShrink:0, display:"flex", alignItems:"center", gap:10, height:"100%" }}>
+        <span style={{ fontFamily:"monospace", fontSize:14, fontWeight:700, color:T.green, letterSpacing:"0.2em" }}>AX</span>
+        <div>
+          <div style={{ fontFamily:"monospace", fontSize:9, color:T.textDim, letterSpacing:"0.1em" }}>ADMIN CONSOLE</div>
+          <div style={{ fontFamily:"monospace", fontSize:8, color:T.textFaint }}>{adminEmail}</div>
+        </div>
+      </div>
+
+      {/* Nav tabs */}
+      <div style={{ flex:1, display:"flex", height:"100%", overflowX:"auto" }}>
+        {SECTIONS.map(s => (
+          <button key={s.id} onClick={()=>onChange(s.id)} style={{
+            padding:"0 18px", height:"100%", fontFamily:"monospace", fontSize:11,
+            letterSpacing:"0.1em", border:"none", cursor:"pointer",
+            borderBottom: active===s.id ? `2px solid ${T.green}` : "2px solid transparent",
+            background: active===s.id ? T.greenFaint : "transparent",
+            color: active===s.id ? T.green : T.textFaint,
+            whiteSpace:"nowrap", transition:"all 0.15s",
+            display:"flex", alignItems:"center", gap:7,
+          }}>
+            <span style={{ fontSize:13 }}>{s.icon}</span> {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Alert badge */}
+      <div style={{ padding:"0 16px", borderLeft:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }}>
+        <span style={{ fontFamily:"monospace", fontSize:10, color:T.red }}>
+          ⚠ 2 AUTH FAILURES
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── OVERVIEW ────────────────────────────────────────────────────────────────
+function Overview() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(()=>setTick(p=>p+1), 3000); return ()=>clearInterval(t); }, []);
+
+  const kpis = [
+    { label:"Tenants Ativos",     value:4,    delta:"+1 este mês",  color:T.green  },
+    { label:"Terapeutas",         value:7,    delta:"+2 este mês",  color:T.green  },
+    { label:"Clientes Total",     value:175,  delta:"+18 esta semana", color:T.blue },
+    { label:"Sessões (30d)",      value:761,  delta:"+12.4% vs anterior", color:T.amber },
+    { label:"Sessões Hoje",       value:23,   delta:"↑ vs média",   color:T.green  },
+    { label:"Engine Comandos/h",  value:148,  delta:"MQTT healthy",  color:T.purple },
+  ];
+
+  // Live activity feed
+  const activities = [
+    { ts:"11:42", msg:"sess-8821 iniciada · Marcia Britto · Hado Quantum",    type:"session" },
+    { ts:"11:38", msg:"ten-003 plano atualizado · enterprise",                type:"tenant"  },
+    { ts:"11:30", msg:"sess-8820 agendada · Roberto Alves · Frequências",     type:"session" },
+    { ts:"11:15", msg:"AUTH FAILURE · 45.77.123.88 (2x) · rate limit on",    type:"alert"   },
+    { ts:"11:10", msg:"axis/hado/start · sess-8819 · freq:528Hz int:70%",     type:"engine"  },
+    { ts:"11:08", msg:"th-007 criado · Ana Lima · tenant Luz Interior",       type:"admin"   },
+    { ts:"10:55", msg:"rep-441 assinado · Paulo Gomes",                       type:"report"  },
+  ];
+
+  const typeColors = { session:T.green, tenant:T.blue, alert:T.red, engine:T.purple, admin:T.amber, report:T.greenDim };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:1, background:T.border }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ background:T.bg1, padding:"16px 18px" }}>
+            <Label>{k.label}</Label>
+            <div style={{ marginTop:8, marginBottom:4 }}><Num size={32} color={k.color}>{k.value}</Num></div>
+            <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>{k.delta}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, background:T.border }}>
+        {/* Sessions chart */}
+        <div style={{ background:T.bg1, padding:"16px 18px", gridColumn:"span 2" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <Label>SESSÕES — 7 DIAS</Label>
+            <span style={{ fontFamily:"monospace", fontSize:10, color:T.greenDim }}>▲ +12.4%</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"flex-end", gap:4, height:80 }}>
+            {SESSIONS_CHART.map((d,i) => {
+              const max = Math.max(...SESSIONS_CHART.map(x=>x.count));
+              const pct = (d.count/max)*100;
+              return (
+                <div key={d.day} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                  <span style={{ fontFamily:"monospace", fontSize:9, color:T.textFaint }}>{d.count}</span>
+                  <div style={{
+                    width:"100%", height:`${pct}%`, minHeight:4,
+                    background: i===6 ? T.greenFaint : `${T.green}22`,
+                    border:`1px solid ${i===6 ? T.green+"66" : T.border}`,
+                    transition:"height 0.5s",
+                  }} />
+                  <span style={{ fontFamily:"monospace", fontSize:9, color:T.textFaint }}>{d.day}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Plan distribution */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:14 }}>DISTRIBUIÇÃO DE PLANOS</Label>
+          {PLAN_DIST.map(p => (
+            <div key={p.plan} style={{ marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:p.color }}>{p.plan.toUpperCase()}</span>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim }}>{p.count} tenant{p.count>1?"s":""}</span>
+              </div>
+              <div style={{ height:4, background:T.bg3, borderRadius:0 }}>
+                <div style={{ height:"100%", width:`${(p.count/5)*100}%`, background:p.color, transition:"width 0.5s" }} />
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop:16, paddingTop:12, borderTop:`1px solid ${T.border}` }}>
+            <div style={{ display:"flex", justifyContent:"space-between" }}>
+              <Label>MRR ESTIMADO</Label>
+              <Num size={18} color={T.amber}>R$4.890</Num>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Activity feed + system health */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 280px", gap:1, background:T.border }}>
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <Label>ACTIVITY FEED — LIVE</Label>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <StatusDot status="active" />
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.green }}>STREAMING</span>
+            </div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+            {activities.map((a,i) => (
+              <div key={i} style={{ display:"flex", gap:12, padding:"7px 0", borderBottom:`1px solid ${T.border}`, alignItems:"flex-start" }}>
+                <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, flexShrink:0, width:36 }}>{a.ts}</span>
+                <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, flexShrink:0, width:52 }}>[{a.type.toUpperCase()}]</span>
+                <span style={{ fontFamily:"monospace", fontSize:11, color: typeColors[a.type]||T.textDim, lineHeight:1.4 }}>{a.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:14 }}>SYSTEM HEALTH</Label>
+          {[
+            { label:"CPU",      value:23, unit:"%", color:T.green  },
+            { label:"MEMÓRIA",  value:61, unit:"%", color:T.amber  },
+            { label:"DISCO",    value:38, unit:"%", color:T.green  },
+            { label:"DB CONN",  value:12, unit:"/100", color:T.green },
+            { label:"API RPS",  value:84, unit:"req/s", color:T.blue },
+            { label:"ERR RATE", value:0.3,unit:"%", color:T.green  },
+          ].map(m => (
+            <div key={m.label} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>{m.label}</span>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:m.color }}>{m.value}{m.unit}</span>
+              </div>
+              <div style={{ height:2, background:T.bg3 }}>
+                <div style={{ height:"100%", width:`${Math.min(100, (m.value/100)*100)}%`, background:m.color }} />
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop:16, paddingTop:12, borderTop:`1px solid ${T.border}` }}>
+            <Label style={{ display:"block", marginBottom:6 }}>LAST BACKUP</Label>
+            <span style={{ fontFamily:"monospace", fontSize:11, color:T.greenDim }}>✓ 2025-05-30 04:00 UTC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TENANTS ────────────────────────────────────────────────────────────────
+function Tenants() {
+  const [tenants, setTenants] = useState(MOCK_TENANTS);
+  const [selected, setSelected] = useState(null);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ name:"", slug:"", owner:"", plan:"starter" });
+
+  const PLAN_COLOR = { enterprise:T.amber, pro:T.green, starter:T.blueDim };
+
+  function createTenant() {
+    setTenants(p => [...p, { id:`ten-00${p.length+1}`, ...form, therapists:0, clients:0, sessions:0, status:"active", created:new Date().toLocaleDateString("pt-BR") }]);
+    setModal(false);
+    setForm({ name:"", slug:"", owner:"", plan:"starter" });
+  }
+
+  return (
+    <div style={{ display:"flex", gap:1, background:T.border, minHeight:500 }}>
+      {/* List */}
+      <div style={{ flex:1, background:T.bg1 }}>
+        <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <Label>TENANTS ({tenants.length})</Label>
+          <Btn onClick={()=>setModal(true)}>+ NOVO TENANT</Btn>
+        </div>
+
+        {/* Table header */}
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 1.5fr 80px 60px 60px 70px 80px", padding:"6px 12px", background:T.bg3, borderBottom:`1px solid ${T.border}` }}>
+          {["NOME","OWNER","PLANO","TERAP.","CLI.","SESSÕES","STATUS"].map(h => (
+            <Label key={h}>{h}</Label>
+          ))}
+        </div>
+
+        {tenants.map(t => (
+          <div key={t.id} onClick={()=>setSelected(t)} style={{
+            display:"grid", gridTemplateColumns:"2fr 1.5fr 80px 60px 60px 70px 80px",
+            padding:"10px 12px", borderBottom:`1px solid ${T.border}`,
+            cursor:"pointer", transition:"background 0.1s",
+            background: selected?.id===t.id ? T.greenFaint : "transparent",
+          }}
+          onMouseEnter={e=>{ if(selected?.id!==t.id) e.currentTarget.style.background=T.bg3; }}
+          onMouseLeave={e=>{ if(selected?.id!==t.id) e.currentTarget.style.background="transparent"; }}>
+            <div>
+              <div style={{ fontFamily:"monospace", fontSize:12, color:T.white }}>{t.name}</div>
+              <div style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>{t.slug}</div>
+            </div>
+            <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{t.owner}</span>
+            <div style={{ alignSelf:"center" }}><Pill color={PLAN_COLOR[t.plan]}>{t.plan}</Pill></div>
+            <Num size={14} color={T.textDim} style={{ alignSelf:"center" }}>{t.therapists}</Num>
+            <Num size={14} color={T.textDim} style={{ alignSelf:"center" }}>{t.clients}</Num>
+            <Num size={14} color={T.textDim} style={{ alignSelf:"center" }}>{t.sessions}</Num>
+            <div style={{ display:"flex", alignItems:"center", alignSelf:"center" }}>
+              <StatusDot status={t.status} />
+              <span style={{ fontFamily:"monospace", fontSize:10, color: t.status==="active"?T.greenDim:T.redDim }}>{t.status.toUpperCase()}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail panel */}
+      {selected && (
+        <div style={{ width:280, background:T.bg1, borderLeft:`1px solid ${T.border}`, padding:16, flexShrink:0 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+            <Label>TENANT DETAIL</Label>
+            <button onClick={()=>setSelected(null)} style={{ background:"none", border:"none", color:T.textFaint, cursor:"pointer", fontFamily:"monospace", fontSize:12 }}>×</button>
+          </div>
+
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontFamily:"monospace", fontSize:14, color:T.green, marginBottom:4 }}>{selected.name}</div>
+            <div style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>{selected.id}</div>
+          </div>
+
+          {[
+            ["Owner",    selected.owner],
+            ["Slug",     selected.slug],
+            ["Plano",    selected.plan],
+            ["Criado",   selected.created],
+            ["Terapeutas",selected.therapists],
+            ["Clientes", selected.clients],
+            ["Sessões",  selected.sessions],
+            ["Status",   selected.status],
+          ].map(([k,v]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${T.border}` }}>
+              <Label>{k}</Label>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim }}>{v}</span>
+            </div>
+          ))}
+
+          <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:16 }}>
+            <Btn variant="primary" onClick={()=>{}}>✎ EDITAR</Btn>
+            <Btn variant="amber"   onClick={()=>{}}>↑ UPGRADE PLANO</Btn>
+            <Btn variant="danger"  onClick={()=>setTenants(p=>p.map(t=>t.id===selected.id?{...t,status:t.status==="active"?"inactive":"active"}:t))}>
+              {selected.status==="active"?"⊘ SUSPENDER":"✓ REATIVAR"}
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Modal */}
+      {modal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
+          <div style={{ background:T.bg1, border:`1px solid ${T.border2}`, padding:28, width:400 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+              <Label style={{ fontSize:12 }}>NOVO TENANT</Label>
+              <button onClick={()=>setModal(false)} style={{ background:"none", border:"none", color:T.textFaint, cursor:"pointer", fontSize:14 }}>×</button>
+            </div>
+            {[["Nome",  "name","text"],["Slug","slug","text"],["Owner","owner","text"]].map(([l,k,t]) => (
+              <div key={k} style={{ marginBottom:12 }}>
+                <Label style={{ display:"block", marginBottom:6 }}>{l}</Label>
+                <input type={t} value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+                  style={{ width:"100%", padding:"7px 10px", background:T.bg3, border:`1px solid ${T.border2}`, color:T.green, fontFamily:"monospace", fontSize:12, outline:"none" }} />
+              </div>
+            ))}
+            <div style={{ marginBottom:16 }}>
+              <Label style={{ display:"block", marginBottom:6 }}>PLANO</Label>
+              <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))}
+                style={{ width:"100%", padding:"7px 10px", background:T.bg3, border:`1px solid ${T.border2}`, color:T.green, fontFamily:"monospace", fontSize:12, outline:"none", cursor:"pointer" }}>
+                {["starter","pro","enterprise"].map(p => <option key={p} value={p} style={{background:T.bg1}}>{p.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn onClick={createTenant} disabled={!form.name||!form.slug}>✓ CRIAR TENANT</Btn>
+              <Btn variant="ghost" onClick={()=>setModal(false)}>CANCELAR</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── THERAPISTS ───────────────────────────────────────────────────────────────
+function Therapists() {
+  const [therapists, setTherapists] = useState(MOCK_THERAPISTS);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const filtered = therapists.filter(t =>
+    (filterStatus==="all" || t.status===filterStatus) &&
+    (t.name.toLowerCase().includes(search.toLowerCase()) || t.email.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      {/* Controls */}
+      <div style={{ background:T.bg1, padding:"10px 14px", display:"flex", gap:12, alignItems:"center", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ position:"relative", flex:1 }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.textFaint, fontSize:12 }}>⌕</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar terapeuta..."
+            style={{ width:"100%", padding:"6px 10px 6px 28px", background:T.bg3, border:`1px solid ${T.border}`, color:T.green, fontFamily:"monospace", fontSize:12, outline:"none" }} />
+        </div>
+        {["all","active","inactive"].map(f => (
+          <button key={f} onClick={()=>setFilterStatus(f)} style={{
+            fontFamily:"monospace", fontSize:10, letterSpacing:"0.1em", padding:"5px 12px",
+            background: filterStatus===f ? T.greenFaint : "transparent",
+            border:`1px solid ${filterStatus===f ? T.green+"44" : T.border}`,
+            color: filterStatus===f ? T.green : T.textFaint, cursor:"pointer",
+          }}>
+            {f.toUpperCase()}
+          </button>
+        ))}
+        <Btn>+ NOVO TERAPEUTA</Btn>
+      </div>
+
+      <div style={{ display:"flex", gap:1, background:T.border }}>
+        {/* Table */}
+        <div style={{ flex:1, background:T.bg1 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1.5fr 80px 60px 100px 80px", padding:"6px 12px", background:T.bg3, borderBottom:`1px solid ${T.border}` }}>
+            {["NOME","EMAIL","TENANT","REG.","SESS.","ÚLTIMO ACESSO","STATUS"].map(h => <Label key={h}>{h}</Label>)}
+          </div>
+
+          {filtered.map(t => (
+            <div key={t.id} onClick={()=>setSelected(t)} style={{
+              display:"grid", gridTemplateColumns:"2fr 2fr 1.5fr 80px 60px 100px 80px",
+              padding:"10px 12px", borderBottom:`1px solid ${T.border}`,
+              cursor:"pointer", transition:"background 0.1s",
+              background: selected?.id===t.id ? T.greenFaint : "transparent",
+            }}
+            onMouseEnter={e=>{ if(selected?.id!==t.id) e.currentTarget.style.background=T.bg3; }}
+            onMouseLeave={e=>{ if(selected?.id!==t.id) e.currentTarget.style.background="transparent"; }}>
+              <span style={{ fontFamily:"monospace", fontSize:12, color:T.white, alignSelf:"center" }}>{t.name}</span>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{t.email}</span>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center" }}>{t.tenant.split(" ").slice(0,2).join(" ")}</span>
+              <span style={{ fontFamily:"monospace", fontSize:9, color:T.textFaint, alignSelf:"center" }}>{t.registration}</span>
+              <Num size={13} color={T.textDim} style={{ alignSelf:"center" }}>{t.sessions}</Num>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center" }}>{t.last_active}</span>
+              <div style={{ display:"flex", alignItems:"center", alignSelf:"center" }}>
+                <StatusDot status={t.status} />
+                <span style={{ fontFamily:"monospace", fontSize:10, color:t.status==="active"?T.greenDim:T.redDim }}>{t.status.toUpperCase()}</span>
+              </div>
+            </div>
+          ))}
+
+          {filtered.length===0 && (
+            <div style={{ padding:40, textAlign:"center", fontFamily:"monospace", fontSize:12, color:T.textFaint }}>
+              NENHUM RESULTADO
+            </div>
+          )}
+        </div>
+
+        {/* Detail */}
+        {selected && (
+          <div style={{ width:260, background:T.bg1, padding:16, flexShrink:0 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+              <Label>PERFIL</Label>
+              <button onClick={()=>setSelected(null)} style={{ background:"none", border:"none", color:T.textFaint, cursor:"pointer", fontSize:14 }}>×</button>
+            </div>
+            <div style={{ fontFamily:"monospace", fontSize:13, color:T.green, marginBottom:3 }}>{selected.name}</div>
+            <div style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, marginBottom:14 }}>{selected.id}</div>
+
+            {[["Email",selected.email],["Tenant",selected.tenant],["Registro",selected.registration],["Sessões",selected.sessions],["Clientes",selected.clients],["Último Acesso",selected.last_active],["Status",selected.status]].map(([k,v])=>(
+              <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:`1px solid ${T.border}` }}>
+                <Label>{k}</Label>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim }}>{v}</span>
+              </div>
+            ))}
+
+            <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:14 }}>
+              <Btn>✎ EDITAR</Btn>
+              <Btn variant="ghost">✉ ENVIAR CONVITE</Btn>
+              <Btn variant="danger" onClick={()=>setTherapists(p=>p.map(x=>x.id===selected.id?{...x,status:x.status==="active"?"inactive":"active"}:x))}>
+                {selected.status==="active"?"⊘ SUSPENDER":"✓ REATIVAR"}
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SESSIONS ADMIN ───────────────────────────────────────────────────────────
+function SessionsAdmin() {
+  const sessions = [
+    { id:"sess-8821", client:"Maria Silva",   therapist:"Marcia Britto",  table:"Hado Quantum",    status:"in_progress", started:"11:42", tenant:"Luz Interior",  duration:"00:18" },
+    { id:"sess-8820", client:"José Costa",    therapist:"Roberto Alves",  table:"Frequências",     status:"scheduled",   started:"14:00", tenant:"Equilíbrio",    duration:"—"    },
+    { id:"sess-8819", client:"Ana Paula",     therapist:"Fernanda Costa", table:"Chakras",          status:"completed",   started:"10:00", tenant:"Quantum Terapia",duration:"01:02"},
+    { id:"sess-8818", client:"Carlos Neto",   therapist:"Paulo Gomes",    table:"Radiônica",        status:"completed",   started:"09:00", tenant:"Quantum Terapia",duration:"00:45"},
+    { id:"sess-8817", client:"Lúcia Martins", therapist:"Lucia Ferreira", table:"Multidimensional", status:"completed",   started:"08:00", tenant:"Terapias do Ser",duration:"00:55"},
+    { id:"sess-8816", client:"Pedro Lima",    therapist:"Ana Lima",       table:"Ancestral",        status:"cancelled",   started:"07:30", tenant:"Luz Interior",  duration:"—"    },
+  ];
+
+  const STATUS_COLOR = { in_progress:T.green, scheduled:T.blue, completed:T.greenDim, cancelled:T.redDim };
+
+  return (
+    <div style={{ background:T.bg1 }}>
+      <div style={{ padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}` }}>
+        <Label>SESSÕES — TODAS AS TENANTS</Label>
+        <div style={{ display:"flex", gap:8 }}>
+          <span style={{ fontFamily:"monospace", fontSize:10, color:T.green }}>● 1 EM ANDAMENTO</span>
+          <span style={{ fontFamily:"monospace", fontSize:10, color:T.blue }}>● 1 AGENDADA</span>
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1.5fr 1.5fr 1.5fr 1fr 80px 80px", padding:"6px 14px", background:T.bg3, borderBottom:`1px solid ${T.border}` }}>
+        {["ID","CLIENTE","TERAPEUTA","MESA","TENANT","STATUS","DURAÇÃO"].map(h=><Label key={h}>{h}</Label>)}
+      </div>
+
+      {sessions.map(s => (
+        <div key={s.id} style={{ display:"grid", gridTemplateColumns:"1.2fr 1.5fr 1.5fr 1.5fr 1fr 80px 80px", padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}
+          onMouseEnter={e=>e.currentTarget.style.background=T.bg3}
+          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center" }}>{s.id}</span>
+          <span style={{ fontFamily:"monospace", fontSize:12, color:T.white, alignSelf:"center" }}>{s.client}</span>
+          <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{s.therapist}</span>
+          <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{s.table}</span>
+          <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center" }}>{s.tenant}</span>
+          <div style={{ display:"flex", alignItems:"center", alignSelf:"center" }}>
+            <StatusDot status={s.status==="in_progress"?"active":s.status==="scheduled"?"warning":s.status==="completed"?"active":"inactive"} />
+            <span style={{ fontFamily:"monospace", fontSize:9, color:STATUS_COLOR[s.status] }}>{s.status.replace("_"," ").toUpperCase()}</span>
+          </div>
+          <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{s.duration}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── ENGINE ADMIN ─────────────────────────────────────────────────────────────
+function EngineAdmin() {
+  const [commands, setCommands] = useState([
+    { id:1, ts:"11:10", tenant:"Luz Interior", therapist:"Marcia Britto", table:"hado-quantum", cmd:"start", params:'{"freq":528,"int":70}', ack:true  },
+    { id:2, ts:"10:55", tenant:"Quantum",      therapist:"Paulo Gomes",   table:"chakras",      cmd:"start", params:'{"center":"all"}',      ack:true  },
+    { id:3, ts:"10:30", tenant:"Ser",          therapist:"Lucia Ferreira",table:"frequencies",  cmd:"stop",  params:"{}",                    ack:true  },
+    { id:4, ts:"09:55", tenant:"Equilíbrio",   therapist:"Roberto Alves", table:"radionica",    cmd:"start", params:'{"rate":"XYZ","int":50}',ack:false },
+  ]);
+
+  const [topicTest, setTopicTest] = useState("axis/hado-quantum/status");
+  const [testLog, setTestLog] = useState([]);
+
+  function sendTest() {
+    setTestLog(p => [{
+      ts: new Date().toLocaleTimeString("pt-BR"), topic:topicTest,
+      result:"PUBLISHED · QoS 1 · ACK pending...",
+    }, ...p].slice(0,10));
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      {/* MQTT stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:1, background:T.border }}>
+        {[
+          { label:"MQTT BROKER",  value:"EMQX",   sub:"cloud.emqx.io",  color:T.green  },
+          { label:"CONNECTIONS",  value:12,        sub:"dispositivos",   color:T.green  },
+          { label:"MSG/MIN",      value:284,       sub:"throughput",     color:T.blue   },
+          { label:"ACK RATE",     value:"99.7%",   sub:"última hora",    color:T.green  },
+          { label:"PENDING ACK",  value:1,         sub:"aguardando",     color:T.amber  },
+        ].map(m => (
+          <div key={m.label} style={{ background:T.bg1, padding:"14px 16px" }}>
+            <Label style={{ display:"block", marginBottom:8 }}>{m.label}</Label>
+            <Num size={22} color={m.color}>{m.value}</Num>
+            <div style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, marginTop:4 }}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 280px", gap:1, background:T.border }}>
+        {/* Command log */}
+        <div style={{ background:T.bg1 }}>
+          <div style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+            <Label>COMMAND LOG — MQTT DISPATCH</Label>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"60px 1fr 1.5fr 1.5fr 70px auto 50px", padding:"6px 14px", background:T.bg3, borderBottom:`1px solid ${T.border}` }}>
+            {["TS","TENANT","TERAPEUTA","MESA","CMD","PARAMS","ACK"].map(h=><Label key={h}>{h}</Label>)}
+          </div>
+          {commands.map(c => (
+            <div key={c.id} style={{ display:"grid", gridTemplateColumns:"60px 1fr 1.5fr 1.5fr 70px auto 50px", padding:"9px 14px", borderBottom:`1px solid ${T.border}` }}>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center" }}>{c.ts}</span>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{c.tenant}</span>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{c.therapist}</span>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim, alignSelf:"center" }}>{c.table}</span>
+              <Pill color={c.cmd==="start"?T.green:c.cmd==="stop"?T.red:T.blue}>{c.cmd}</Pill>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, alignSelf:"center", overflow:"hidden" }}>{c.params}</span>
+              <div style={{ alignSelf:"center" }}><StatusDot status={c.ack?"active":"inactive"} /></div>
+            </div>
+          ))}
+        </div>
+
+        {/* MQTT test panel */}
+        <div style={{ background:T.bg1, padding:16 }}>
+          <Label style={{ display:"block", marginBottom:12 }}>MQTT TEST PUBLISH</Label>
+          <div style={{ marginBottom:10 }}>
+            <Label style={{ display:"block", marginBottom:5 }}>TÓPICO</Label>
+            <input value={topicTest} onChange={e=>setTopicTest(e.target.value)}
+              style={{ width:"100%", padding:"6px 8px", background:T.bg3, border:`1px solid ${T.border2}`, color:T.green, fontFamily:"monospace", fontSize:11, outline:"none" }} />
+          </div>
+          <Btn onClick={sendTest} style={{ width:"100%", justifyContent:"center", marginBottom:12 }}>▶ PUBLICAR</Btn>
+          <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+            {testLog.map((l,i) => (
+              <div key={i} style={{ fontFamily:"monospace", fontSize:10, color:T.greenDim, padding:"4px 0", borderBottom:`1px solid ${T.border}` }}>
+                <span style={{ color:T.textFaint }}>{l.ts} </span>{l.result}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop:16, paddingTop:12, borderTop:`1px solid ${T.border}` }}>
+            <Label style={{ display:"block", marginBottom:8 }}>TÓPICOS ATIVOS</Label>
+            {["axis/hado/#","axis/chakras/#","axis/frequencies/#","axis/multi/#"].map(t => (
+              <div key={t} style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, padding:"3px 0" }}>
+                <StatusDot status="active" />{t}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+function AuditLog() {
+  const [logs] = useState(MOCK_AUDIT);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const actions = ["all","session","auth","tenant","engine","report","admin","backup"];
+  const filtered = logs.filter(l =>
+    (filter==="all" || l.action.startsWith(filter)) &&
+    (l.actor.includes(search) || l.action.includes(search) || l.resource.includes(search))
+  );
+
+  const ACTION_COLOR = {
+    "session": T.green, "auth": T.red, "tenant": T.blue,
+    "engine": T.purple, "report": T.greenDim, "admin": T.amber, "backup": T.greenDim,
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:T.border }}>
+        {[
+          { label:"TOTAL EVENTOS (24h)",  value:logs.length, color:T.green },
+          { label:"FALHAS AUTH",          value:logs.filter(l=>l.action.startsWith("auth")).length, color:T.red },
+          { label:"IPs ÚNICOS",           value:new Set(logs.map(l=>l.ip)).size, color:T.blue },
+          { label:"ERROS",                value:logs.filter(l=>l.status==="err").length, color:T.amber },
+        ].map(s => (
+          <div key={s.label} style={{ background:T.bg1, padding:"14px 16px" }}>
+            <Label style={{ display:"block", marginBottom:8 }}>{s.label}</Label>
+            <Num size={28} color={s.color}>{s.value}</Num>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ background:T.bg1, padding:"10px 14px", display:"flex", gap:10, alignItems:"center", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ position:"relative" }}>
+          <span style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:T.textFaint, fontSize:11 }}>⌕</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Filtrar..."
+            style={{ padding:"5px 8px 5px 24px", background:T.bg3, border:`1px solid ${T.border}`, color:T.green, fontFamily:"monospace", fontSize:11, outline:"none", width:200 }} />
+        </div>
+        <div style={{ display:"flex", gap:4 }}>
+          {actions.map(a => (
+            <button key={a} onClick={()=>setFilter(a)} style={{
+              fontFamily:"monospace", fontSize:10, padding:"4px 10px", letterSpacing:"0.08em",
+              background: filter===a ? (ACTION_COLOR[a]||T.green)+"18" : "transparent",
+              border:`1px solid ${filter===a ? (ACTION_COLOR[a]||T.green)+"44" : T.border}`,
+              color: filter===a ? (ACTION_COLOR[a]||T.green) : T.textFaint,
+              cursor:"pointer",
+            }}>
+              {a.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div style={{ flex:1 }} />
+        <Btn variant="ghost">⬇ EXPORTAR CSV</Btn>
+      </div>
+
+      {/* Table */}
+      <div style={{ background:T.bg1 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"140px 2fr 1.5fr 1.2fr 120px 50px", padding:"6px 14px", background:T.bg3, borderBottom:`1px solid ${T.border}` }}>
+          {["TIMESTAMP","ACTOR","ACTION","RESOURCE","IP","STATUS"].map(h=><Label key={h}>{h}</Label>)}
+        </div>
+        {filtered.map(log => {
+          const cat = log.action.split(".")[0];
+          return (
+            <div key={log.id} style={{ display:"grid", gridTemplateColumns:"140px 2fr 1.5fr 1.2fr 120px 50px", padding:"8px 14px", borderBottom:`1px solid ${T.border}`, fontFamily:"monospace" }}
+              onMouseEnter={e=>e.currentTarget.style.background=T.bg3}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <span style={{ fontSize:10, color:T.textFaint, alignSelf:"center" }}>{log.ts}</span>
+              <span style={{ fontSize:11, color: log.actor.includes("unknown")?T.red:log.actor.includes("system")?T.blue:T.textDim, alignSelf:"center" }}>{log.actor}</span>
+              <span style={{ fontSize:11, color: ACTION_COLOR[cat]||T.textDim, alignSelf:"center" }}>{log.action}</span>
+              <span style={{ fontSize:10, color:T.textFaint, alignSelf:"center" }}>{log.resource}</span>
+              <span style={{ fontSize:10, color: log.ip==="—"?T.textFaint:T.textDim, alignSelf:"center" }}>{log.ip}</span>
+              <div style={{ display:"flex", alignItems:"center", alignSelf:"center" }}>
+                <StatusDot status={log.status==="ok"?"active":"inactive"} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────────────
+function Analytics() {
+  const monthly = [
+    { m:"Nov/24", sessions:89,  tenants:1, clients:8   },
+    { m:"Dez/24", sessions:134, tenants:2, clients:24  },
+    { m:"Jan/25", sessions:201, tenants:3, clients:48  },
+    { m:"Fev/25", sessions:287, tenants:3, clients:71  },
+    { m:"Mar/25", sessions:342, tenants:4, clients:102 },
+    { m:"Abr/25", sessions:418, tenants:5, clients:138 },
+    { m:"Mai/25", sessions:761, tenants:5, clients:175 },
+  ];
+  const max = Math.max(...monthly.map(m=>m.sessions));
+
+  const topTherapists = [
+    { name:"Lucia Ferreira", sessions:167, growth:"+18%" },
+    { name:"Fernanda Costa", sessions:145, growth:"+12%" },
+    { name:"Paulo Gomes",    sessions:98,  growth:"+8%"  },
+    { name:"Marcia Britto",  sessions:89,  growth:"+22%" },
+    { name:"Roberto Alves",  sessions:54,  growth:"+5%"  },
+  ];
+
+  const tableUsage = [
+    { name:"Mesa Hado Quantum",    pct:32, color:T.purple },
+    { name:"Mesa de Frequências",  pct:28, color:T.green  },
+    { name:"Mesa de Chakras",      pct:20, color:T.blue   },
+    { name:"Máquina Radiônica",    pct:12, color:T.amber  },
+    { name:"Mesa Multidimensional",pct:8,  color:T.greenDim },
+  ];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      {/* Growth chart */}
+      <div style={{ background:T.bg1, padding:"16px 18px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <Label>CRESCIMENTO MENSAL — SESSÕES</Label>
+          <span style={{ fontFamily:"monospace", fontSize:11, color:T.green }}>▲ +82% (Nov→Mai)</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:100 }}>
+          {monthly.map((m,i) => (
+            <div key={m.m} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+              <span style={{ fontFamily:"monospace", fontSize:9, color:T.textFaint }}>{m.sessions}</span>
+              <div style={{
+                width:"100%", height:`${(m.sessions/max)*100}%`, minHeight:4,
+                background: i===monthly.length-1 ? `${T.green}44` : `${T.green}18`,
+                border:`1px solid ${i===monthly.length-1 ? T.green+"88" : T.border}`,
+              }} />
+              <span style={{ fontFamily:"monospace", fontSize:9, color:T.textFaint }}>{m.m}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, background:T.border }}>
+        {/* Clients growth */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>CLIENTES · CRESCIMENTO</Label>
+          <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:70 }}>
+            {monthly.map((m,i) => (
+              <div key={m.m} style={{ flex:1, height:`${(m.clients/175)*100}%`, minHeight:2,
+                background: i===monthly.length-1 ? `${T.blue}55` : `${T.blue}22`,
+                border:`1px solid ${i===monthly.length-1 ? T.blue+"88" : T.border}`,
+              }} />
+            ))}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:8 }}>
+            <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>Nov/24: 8</span>
+            <Num size={18} color={T.blue}>175</Num>
+          </div>
+        </div>
+
+        {/* Top therapists */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>TOP TERAPEUTAS</Label>
+          {topTherapists.map((t,i) => (
+            <div key={t.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 0", borderBottom:`1px solid ${T.border}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <Num size={12} color={T.textFaint}>{i+1}</Num>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:T.textDim }}>{t.name}</span>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <Num size={13} color={T.green}>{t.sessions}</Num>
+                <span style={{ fontFamily:"monospace", fontSize:9, color:T.greenDim, marginLeft:6 }}>{t.growth}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Table usage */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>USO DAS MESAS</Label>
+          {tableUsage.map(t => (
+            <div key={t.name} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                <span style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint }}>{t.name}</span>
+                <span style={{ fontFamily:"monospace", fontSize:11, color:t.color }}>{t.pct}%</span>
+              </div>
+              <div style={{ height:3, background:T.bg3 }}>
+                <div style={{ height:"100%", width:`${t.pct}%`, background:t.color, transition:"width 1s" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Revenue */}
+      <div style={{ background:T.bg1, padding:"16px 18px", display:"flex", gap:40, alignItems:"center" }}>
+        <div>
+          <Label style={{ display:"block", marginBottom:8 }}>MRR ATUAL</Label>
+          <Num size={36} color={T.amber}>R$4.890</Num>
+        </div>
+        <div>
+          <Label style={{ display:"block", marginBottom:8 }}>ARR PROJETADO</Label>
+          <Num size={36} color={T.green}>R$58.680</Num>
+        </div>
+        <div>
+          <Label style={{ display:"block", marginBottom:8 }}>CHURN RATE</Label>
+          <Num size={36} color={T.green}>0%</Num>
+        </div>
+        <div>
+          <Label style={{ display:"block", marginBottom:8 }}>LTV MÉDIO</Label>
+          <Num size={36} color={T.blue}>R$1.224</Num>
+        </div>
+        <div style={{ flex:1, textAlign:"right" }}>
+          <Pill color={T.green}>PLATAFORMA SAUDÁVEL</Pill>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SYSTEM ───────────────────────────────────────────────────────────────────
+function System() {
+  const [dbStatus] = useState({ size:"2.4 GB", tables:15, rls:"Ativo", backup:"Automático", region:"sa-east-1" });
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, background:T.border }}>
+        {/* Supabase */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>SUPABASE · DATABASE</Label>
+          {[["Status","Operacional"],["Tamanho DB",dbStatus.size],["Tabelas",dbStatus.tables],["RLS",dbStatus.rls],["Backup",dbStatus.backup],["Região",dbStatus.region]].map(([k,v])=>(
+            <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${T.border}` }}>
+              <Label>{k}</Label>
+              <span style={{ fontFamily:"monospace", fontSize:11, color:T.green }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ marginTop:12, display:"flex", gap:6 }}>
+            <Btn size="sm">↓ BACKUP AGORA</Btn>
+            <Btn size="sm" variant="ghost">✎ MIGRATIONS</Btn>
+          </div>
+        </div>
+
+        {/* Deploy */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>DEPLOY · INFRAESTRUTURA</Label>
+          {[
+            { name:"Frontend", platform:"Vercel",  status:"active", url:"axiscore.vercel.app", ver:"v1.0.0" },
+            { name:"Backend",  platform:"Render",  status:"active", url:"axis-api.onrender.com", ver:"v1.0.0" },
+            { name:"MQTT",     platform:"EMQX",    status:"active", url:"cloud.emqx.io", ver:"5.x" },
+            { name:"Redis",    platform:"Upstash", status:"active", url:"upstash.io", ver:"7.x" },
+          ].map(s => (
+            <div key={s.name} style={{ padding:"8px 0", borderBottom:`1px solid ${T.border}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <StatusDot status={s.status} />
+                  <span style={{ fontFamily:"monospace", fontSize:12, color:T.white }}>{s.name}</span>
+                </div>
+                <Pill color={T.greenDim}>{s.ver}</Pill>
+              </div>
+              <div style={{ fontFamily:"monospace", fontSize:10, color:T.textFaint, paddingLeft:12 }}>{s.platform} · {s.url}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Config */}
+        <div style={{ background:T.bg1, padding:"16px 18px" }}>
+          <Label style={{ display:"block", marginBottom:12 }}>CONFIGURAÇÕES GLOBAIS</Label>
+          {[
+            ["Versão Plataforma", "1.0.0"],
+            ["Ambiente",          "Production"],
+            ["Auth Provider",     "Supabase"],
+            ["IA Provider",       "Anthropic Claude"],
+            ["ORM",               "Supabase Client"],
+            ["Rate Limit",        "100 req/min"],
+            ["Session Timeout",   "8h"],
+            ["Max Tenants",       "Ilimitado"],
+          ].map(([k,v]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:`1px solid ${T.border}` }}>
+              <Label>{k}</Label>
+              <span style={{ fontFamily:"monospace", fontSize:10, color:T.textDim }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ marginTop:12 }}>
+            <Btn variant="danger" size="sm">⚠ MAINTENANCE MODE</Btn>
+          </div>
+        </div>
+      </div>
+
+      {/* SQL quick runner */}
+      <div style={{ background:T.bg1, padding:"16px 18px" }}>
+        <Label style={{ display:"block", marginBottom:10 }}>SQL QUICK RUNNER</Label>
+        <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+          <textarea defaultValue="SELECT COUNT(*) FROM sessions WHERE status = 'completed';"
+            style={{ flex:1, padding:"8px 10px", background:T.bg3, border:`1px solid ${T.border2}`, color:T.green, fontFamily:"monospace", fontSize:12, outline:"none", resize:"vertical", minHeight:60 }} />
+          <Btn>▶ EXECUTAR</Btn>
+        </div>
+        <div style={{ marginTop:8, padding:"8px 10px", background:T.bg3, border:`1px solid ${T.border}`, fontFamily:"monospace", fontSize:11, color:T.greenDim }}>
+          -- Resultado aparece aqui (conecte ao Supabase para executar)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function AxisCoreAdmin() {
+  const [section, setSection] = useState("overview");
+  const [clock, setClock] = useState(new Date().toLocaleString("pt-BR"));
+
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date().toLocaleString("pt-BR")), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  function renderSection() {
+    switch(section) {
+      case "overview":   return <Overview />;
+      case "tenants":    return <Tenants />;
+      case "therapists": return <Therapists />;
+      case "sessions":   return <SessionsAdmin />;
+      case "engine":     return <EngineAdmin />;
+      case "audit":      return <AuditLog />;
+      case "analytics":  return <Analytics />;
+      case "system":     return <System />;
+      default:           return null;
+    }
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.bg, color:T.green, display:"flex", flexDirection:"column", fontFamily:"monospace" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:${T.bg}; }
+        ::-webkit-scrollbar { width:4px; height:4px; }
+        ::-webkit-scrollbar-track { background:${T.bg1}; }
+        ::-webkit-scrollbar-thumb { background:${T.border2}; }
+        select option { background:${T.bg1}; }
+        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+      `}</style>
+
+      <Scanlines />
+      <StatusBar clock={clock} />
+      <TopNav active={section} onChange={setSection} adminEmail="admin@axiscore.app" />
+
+      {/* Content */}
+      <div style={{ flex:1, overflowY:"auto" }}>
+        {/* Section breadcrumb */}
+        <div style={{ padding:"8px 16px", background:T.bg2, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:10, color:T.textFaint, letterSpacing:"0.1em" }}>AXIS CORE™</span>
+          <span style={{ fontSize:10, color:T.textFaint }}>›</span>
+          <span style={{ fontSize:10, color:T.green, letterSpacing:"0.1em" }}>
+            {SECTIONS.find(s=>s.id===section)?.label}
+          </span>
+          <div style={{ flex:1 }} />
+          <span style={{ fontSize:9, color:T.textFaint, letterSpacing:"0.1em" }}>
+            {section==="audit" && `${MOCK_AUDIT.length} EVENTOS CARREGADOS`}
+            {section==="tenants" && `${MOCK_TENANTS.length} TENANTS`}
+            {section==="therapists" && `${MOCK_THERAPISTS.length} TERAPEUTAS`}
+          </span>
+        </div>
+
+        <div style={{ padding:1, background:T.border }}>
+          {renderSection()}
+        </div>
+      </div>
+    </div>
+  );
+}
