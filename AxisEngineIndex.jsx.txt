@@ -1,0 +1,624 @@
+import { useState, useEffect, useRef } from "react";
+
+const TABLES = [
+  {
+    slug: "hado-quantum",
+    name: "Mesa Hado Quantum",
+    type: "hado_quantum",
+    version: "1.0.0",
+    description: "Emissão de padrões de frequência configuráveis via software com controle de forma de onda e intensidade.",
+    capabilities: { realtime: true, physical_device: true, biometry_input: false, multi_user: false },
+    parameters: [
+      { id: "frequency_hz", label: "Frequência Base", unit: "Hz", type: "number", default: 440, min: 1, max: 22000 },
+      { id: "intensity",    label: "Intensidade",     unit: "%",  type: "number", default: 50,  min: 0, max: 100  },
+      { id: "waveform",     label: "Forma de Onda",               type: "select", default: "sine", options: ["sine","square","triangle","sawtooth"] },
+      { id: "duration",     label: "Duração",         unit: "s",  type: "number", default: 300, min: 1, max: 7200 },
+    ],
+    steps: ["Aquecimento · 60s","Emissão Principal · 240s","Encerramento · 60s"],
+    mqtt: "axis/hado/{start|stop|status|data}",
+    color: "#6366f1",
+    glyph: "◈",
+  },
+  {
+    slug: "multidimensional",
+    name: "Mesa Multidimensional",
+    type: "multidimensional",
+    version: "1.0.0",
+    description: "Múltiplas faixas de frequência simultâneas com suporte a multi-usuário e entrada biométrica.",
+    capabilities: { realtime: true, physical_device: true, biometry_input: true, multi_user: true },
+    parameters: [
+      { id: "channels",        label: "Canais Ativos",   type: "number", default: 4,   min: 1, max: 8     },
+      { id: "base_frequency",  label: "Frequência Base", unit: "Hz", type: "number", default: 528, min: 1, max: 22000 },
+      { id: "duration",        label: "Duração",         unit: "s",  type: "number", default: 600, min: 60, max: 7200 },
+    ],
+    steps: ["Inicialização · 30s","Expansão · 540s"],
+    mqtt: "axis/multi/{start|stop|status|data}",
+    color: "#06b6d4",
+    glyph: "⬡",
+  },
+  {
+    slug: "radionica",
+    name: "Máquina Radiônica",
+    type: "radionica",
+    version: "1.0.0",
+    description: "Interface de transmissão radiônica com campos configuráveis por sessão e múltiplos modos de broadcast.",
+    capabilities: { realtime: false, physical_device: true, biometry_input: false, multi_user: false },
+    parameters: [
+      { id: "rate_code",      label: "Código de Rate",  type: "text",   default: ""           },
+      { id: "intensity",      label: "Intensidade",     unit: "%", type: "number", default: 50, min: 0, max: 100 },
+      { id: "duration",       label: "Duração",         unit: "s", type: "number", default: 1800, min: 60, max: 7200 },
+      { id: "broadcast_mode", label: "Modo Broadcast",  type: "select", default: "continuous", options: ["continuous","pulsed","sequence"] },
+    ],
+    steps: ["Transmissão · 1800s"],
+    mqtt: "axis/radionica/{start|stop|status|data}",
+    color: "#5b8dee",
+    glyph: "⊕",
+  },
+  {
+    slug: "chakras",
+    name: "Mesa de Chakras",
+    type: "chakras",
+    version: "1.0.0",
+    description: "Trabalho com frequências por centro energético configurável, com leitura, balanceamento e fechamento.",
+    capabilities: { realtime: true, physical_device: true, biometry_input: true, multi_user: false },
+    parameters: [
+      { id: "active_centers",    label: "Centros Ativos",      type: "select", default: "all", options: ["all","root","sacral","solar","heart","throat","third_eye","crown"] },
+      { id: "frequency_preset",  label: "Preset de Frequências", type: "select", default: "396-963", options: ["396-963","custom"] },
+      { id: "duration",          label: "Duração",              unit: "s", type: "number", default: 900, min: 60, max: 7200 },
+    ],
+    steps: ["Leitura · 60s","Balanceamento · 780s","Fechamento · 60s"],
+    mqtt: "axis/chakras/{start|stop|status|data}",
+    color: "#10b981",
+    glyph: "✦",
+  },
+  {
+    slug: "frequencies",
+    name: "Mesa de Frequências",
+    type: "frequencies",
+    version: "1.0.0",
+    description: "Frequências configuráveis com presets por faixa, modo customizado e suporte a batida binaural.",
+    capabilities: { realtime: true, physical_device: true, biometry_input: true, multi_user: false },
+    parameters: [
+      { id: "preset",     label: "Preset",                    type: "select", default: "528", options: ["396","417","528","639","741","852","963","custom"] },
+      { id: "custom_hz",  label: "Freq. Customizada", unit: "Hz", type: "number", default: 440, min: 1, max: 22000 },
+      { id: "duration",   label: "Duração",           unit: "s",  type: "number", default: 600, min: 30, max: 7200 },
+      { id: "binaural",   label: "Batida Binaural",             type: "boolean", default: false },
+    ],
+    steps: ["Emissão · 600s"],
+    mqtt: "axis/frequencies/{start|stop|status|data}",
+    color: "#ec4899",
+    glyph: "⟁",
+  },
+];
+
+const CAP_LABELS = {
+  realtime:        "Tempo Real",
+  physical_device: "Dispositivo Físico",
+  biometry_input:  "Entrada Biométrica",
+  multi_user:      "Multi-Usuário",
+};
+
+function Badge({ active, label }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "3px 10px", borderRadius: 99, fontSize: 11,
+      fontFamily: "'DM Mono', monospace",
+      background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.02)",
+      border: `1px solid ${active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.05)"}`,
+      color: active ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.22)",
+      letterSpacing: "0.02em",
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: active ? "#4ade80" : "rgba(255,255,255,0.15)", flexShrink: 0 }} />
+      {label}
+    </span>
+  );
+}
+
+function ParamRow({ param }) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",
+    }}>
+      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontFamily: "'DM Mono', monospace" }}>
+        {param.id}
+      </span>
+      <div style={{ textAlign: "right" }}>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
+          {param.label}
+        </span>
+        {param.unit && (
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginLeft: 4 }}>
+            · {param.unit}
+          </span>
+        )}
+        {param.options && (
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2, fontFamily: "'DM Mono', monospace" }}>
+            [{param.options.join(" · ")}]
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TableCard({ table, isActive, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        cursor: "pointer",
+        padding: "20px 22px",
+        borderRadius: 12,
+        border: `1px solid ${isActive ? table.color + "55" : "rgba(255,255,255,0.07)"}`,
+        background: isActive
+          ? `linear-gradient(135deg, ${table.color}12, ${table.color}06)`
+          : hovered
+          ? "rgba(255,255,255,0.03)"
+          : "rgba(255,255,255,0.015)",
+        transition: "all 0.2s ease",
+        transform: hovered && !isActive ? "translateY(-1px)" : "none",
+        boxShadow: isActive ? `0 0 0 1px ${table.color}33, 0 4px 32px ${table.color}18` : "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+          background: `${table.color}20`,
+          border: `1px solid ${table.color}40`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 16, color: table.color,
+          transition: "all 0.2s",
+          boxShadow: isActive ? `0 0 12px ${table.color}40` : "none",
+        }}>
+          {table.glyph}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{
+              fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.9)",
+              fontFamily: "'Syne', sans-serif",
+            }}>
+              {table.name}
+            </span>
+            <span style={{
+              fontSize: 10, padding: "2px 6px", borderRadius: 4,
+              background: `${table.color}20`, color: table.color,
+              fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em",
+            }}>
+              v{table.version}
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace" }}>
+            {table.slug}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailPanel({ table, onClose }) {
+  const [activeTab, setActiveTab] = useState("params");
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (panelRef.current) {
+      panelRef.current.style.opacity = "0";
+      panelRef.current.style.transform = "translateX(16px)";
+      requestAnimationFrame(() => {
+        panelRef.current.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+        panelRef.current.style.opacity = "1";
+        panelRef.current.style.transform = "translateX(0)";
+      });
+    }
+  }, [table.slug]);
+
+  const tabs = [
+    { id: "params", label: "Parâmetros" },
+    { id: "steps",  label: "Steps" },
+    { id: "mqtt",   label: "MQTT" },
+    { id: "caps",   label: "Capacidades" },
+  ];
+
+  return (
+    <div ref={panelRef} style={{
+      background: "rgba(12,13,18,0.95)",
+      border: `1px solid ${table.color}33`,
+      borderRadius: 16,
+      padding: "28px 28px 24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 0,
+      boxShadow: `0 0 0 1px ${table.color}18, 0 24px 64px rgba(0,0,0,0.6)`,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <span style={{ fontSize: 22, color: table.color }}>{table.glyph}</span>
+            <h2 style={{
+              margin: 0, fontSize: 18, fontWeight: 700, color: "#fff",
+              fontFamily: "'Syne', sans-serif",
+            }}>
+              {table.name}
+            </h2>
+          </div>
+          <p style={{
+            margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.45)",
+            lineHeight: 1.6, maxWidth: 380,
+          }}>
+            {table.description}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8, padding: "5px 10px", color: "rgba(255,255,255,0.4)",
+            cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono', monospace",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={e => e.target.style.color = "#fff"}
+          onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.4)"}
+        >
+          esc
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 2, marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 3 }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1, padding: "7px 0", fontSize: 12, cursor: "pointer",
+              fontFamily: "'DM Mono', monospace", letterSpacing: "0.03em",
+              borderRadius: 6, border: "none", transition: "all 0.15s",
+              background: activeTab === tab.id ? `${table.color}22` : "transparent",
+              color: activeTab === tab.id ? table.color : "rgba(255,255,255,0.4)",
+              borderBottom: activeTab === tab.id ? `2px solid ${table.color}` : "2px solid transparent",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div style={{ flex: 1 }}>
+        {activeTab === "params" && (
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 8 }}>
+              {table.parameters.length} PARÂMETROS CONFIGURÁVEIS
+            </div>
+            {table.parameters.map(p => <ParamRow key={p.id} param={p} />)}
+          </div>
+        )}
+
+        {activeTab === "steps" && (
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 12 }}>
+              {table.steps.length} STEPS DE EXECUÇÃO
+            </div>
+            {table.steps.map((step, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 12px", marginBottom: 6, borderRadius: 8,
+                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: `${table.color}22`, border: `1px solid ${table.color}44`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, color: table.color, fontFamily: "'DM Mono', monospace",
+                }}>
+                  {i + 1}
+                </div>
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{step}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "mqtt" && (
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 12 }}>
+              TÓPICOS MQTT
+            </div>
+            {["start","stop","status","data"].map(cmd => (
+              <div key={cmd} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "9px 12px", marginBottom: 4, borderRadius: 8,
+                background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <span style={{
+                  fontSize: 11, fontFamily: "'DM Mono', monospace",
+                  background: `${table.color}18`, color: table.color,
+                  padding: "2px 7px", borderRadius: 4,
+                }}>
+                  {cmd}
+                </span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontFamily: "'DM Mono', monospace" }}>
+                  axis/{table.slug}/{cmd}
+                </span>
+              </div>
+            ))}
+            <div style={{
+              marginTop: 14, padding: "10px 12px", borderRadius: 8,
+              background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.08)",
+            }}>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>
+                SUBSCRIBE (wildcard)
+              </div>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Mono', monospace" }}>
+                axis/{table.slug}/#
+              </span>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "caps" && (
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 14 }}>
+              CAPACIDADES DO MÓDULO
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {Object.entries(table.capabilities).map(([key, val]) => (
+                <div key={key} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "10px 14px", borderRadius: 8,
+                  background: val ? `${table.color}08` : "rgba(255,255,255,0.02)",
+                  border: `1px solid ${val ? table.color + "22" : "rgba(255,255,255,0.05)"}`,
+                }}>
+                  <span style={{ fontSize: 13, color: val ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)" }}>
+                    {CAP_LABELS[key]}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontFamily: "'DM Mono', monospace",
+                    color: val ? "#4ade80" : "rgba(255,255,255,0.2)",
+                    background: val ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
+                    padding: "2px 8px", borderRadius: 99,
+                    border: `1px solid ${val ? "rgba(74,222,128,0.2)" : "rgba(255,255,255,0.06)"}`,
+                  }}>
+                    {val ? "enabled" : "disabled"}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 18, padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>TYPE IDENTIFIER</div>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Mono', monospace" }}>
+                TableType::{table.type}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.05)",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontFamily: "'DM Mono', monospace" }}>
+          packages/engine/src/tables/{table.slug}.json
+        </span>
+        <div style={{ display: "flex", gap: 6 }}>
+          <Badge active={table.capabilities.realtime} label="realtime" />
+          <Badge active={table.capabilities.physical_device} label="physical" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AxisEngineIndex() {
+  const [selected, setSelected] = useState(TABLES[0]);
+  const [filter, setFilter] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const filtered = TABLES.filter(t =>
+    t.name.toLowerCase().includes(filter.toLowerCase()) ||
+    t.slug.toLowerCase().includes(filter.toLowerCase()) ||
+    t.type.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #080a0f; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+        input::placeholder { color: rgba(255,255,255,0.2); }
+        input:focus { outline: none; }
+      `}</style>
+
+      <div style={{
+        minHeight: "100vh", background: "#080a0f",
+        fontFamily: "'DM Mono', monospace", color: "#fff",
+        opacity: mounted ? 1 : 0, transition: "opacity 0.4s ease",
+      }}>
+        {/* Ambient glow */}
+        <div style={{
+          position: "fixed", top: -200, left: "50%", transform: "translateX(-50%)",
+          width: 600, height: 400, borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(99,102,241,0.08) 0%, transparent 70%)",
+          pointerEvents: "none", zIndex: 0,
+        }} />
+
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "48px 32px" }}>
+
+          {/* Header */}
+          <div style={{ marginBottom: 48 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{
+                width: 6, height: 6, borderRadius: "50%", background: "#4ade80",
+                boxShadow: "0 0 8px #4ade80",
+                animation: "pulse 2s ease-in-out infinite",
+              }} />
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+                AXIS CORE™ · ENGINE v1.0.0
+              </span>
+            </div>
+
+            <h1 style={{
+              fontFamily: "'Syne', sans-serif", fontSize: "clamp(28px, 4vw, 44px)",
+              fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1,
+              color: "#fff", marginBottom: 10,
+            }}>
+              Module Index
+            </h1>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
+              {TABLES.length} mesas carregáveis · Registry singleton · JSON-driven
+            </p>
+          </div>
+
+          {/* Stats bar */}
+          <div style={{
+            display: "flex", gap: 1, marginBottom: 36, overflow: "hidden", borderRadius: 10,
+          }}>
+            {[
+              { label: "Módulos",          value: TABLES.length },
+              { label: "Com Realtime",     value: TABLES.filter(t => t.capabilities.realtime).length },
+              { label: "Físicos",          value: TABLES.filter(t => t.capabilities.physical_device).length },
+              { label: "Com Biometria",    value: TABLES.filter(t => t.capabilities.biometry_input).length },
+              { label: "Multi-Usuário",    value: TABLES.filter(t => t.capabilities.multi_user).length },
+            ].map((stat, i) => (
+              <div key={i} style={{
+                flex: 1, padding: "14px 16px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 0,
+                ...(i === 0 ? { borderTopLeftRadius: 10, borderBottomLeftRadius: 10 } : {}),
+                ...(i === 4 ? { borderTopRightRadius: 10, borderBottomRightRadius: 10 } : {}),
+              }}>
+                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: "#fff", lineHeight: 1 }}>
+                  {stat.value}
+                </div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 4, letterSpacing: "0.06em" }}>
+                  {stat.label.toUpperCase()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Layout */}
+          <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 16, alignItems: "start" }}>
+
+            {/* Left — table list */}
+            <div>
+              {/* Search */}
+              <div style={{ marginBottom: 12, position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="Filtrar módulos..."
+                  value={filter}
+                  onChange={e => setFilter(e.target.value)}
+                  style={{
+                    width: "100%", padding: "9px 12px 9px 34px",
+                    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "'DM Mono', monospace",
+                  }}
+                />
+                <span style={{
+                  position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                  color: "rgba(255,255,255,0.25)", fontSize: 13,
+                }}>⌕</span>
+              </div>
+
+              {/* Cards */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {filtered.length === 0 ? (
+                  <div style={{ padding: "24px 16px", textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: 12 }}>
+                    Nenhum módulo encontrado
+                  </div>
+                ) : (
+                  filtered.map(table => (
+                    <TableCard
+                      key={table.slug}
+                      table={table}
+                      isActive={selected?.slug === table.slug}
+                      onClick={() => setSelected(table)}
+                    />
+                  ))
+                )}
+              </div>
+
+              {/* Registry snippet */}
+              <div style={{ marginTop: 16, padding: "14px", borderRadius: 10, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", marginBottom: 8 }}>
+                  LOADER
+                </div>
+                <pre style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{`await AxisTableLoader
+  .loadDefaults();
+
+registry.list()
+  // ${TABLES.length} tables loaded`}</pre>
+              </div>
+            </div>
+
+            {/* Right — detail panel */}
+            {selected && (
+              <DetailPanel
+                table={selected}
+                onClose={() => setSelected(null)}
+              />
+            )}
+
+            {!selected && (
+              <div style={{
+                border: "1px dashed rgba(255,255,255,0.07)", borderRadius: 16,
+                padding: "60px 40px", textAlign: "center",
+                color: "rgba(255,255,255,0.2)", fontSize: 13,
+              }}>
+                Selecione um módulo para inspecionar
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            marginTop: 48, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.05)",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.06em" }}>
+              AXIS CORE™ · packages/engine/src · Extensível via JSON
+            </span>
+            <div style={{ display: "flex", gap: 16 }}>
+              {["registry.ts","loader.ts","tables/"].map(f => (
+                <span key={f} style={{
+                  fontSize: 10, fontFamily: "'DM Mono', monospace",
+                  color: "rgba(255,255,255,0.25)", letterSpacing: "0.04em",
+                }}>
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+    </>
+  );
+}
