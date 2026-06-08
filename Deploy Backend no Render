@@ -1,0 +1,5 @@
+# render.com → New Web Service → Connect GitHub
+# Runtime: Docker
+# Dockerfile Path: apps/backend/Dockerfile
+# Root Directory: . (raiz do monorepo)
+# Environment Variables: adicione todas do .env backend
