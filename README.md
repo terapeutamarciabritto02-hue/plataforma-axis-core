@@ -1,152 +1,215 @@
-# AXIS CORE™ — Monorepo
-
-Plataforma terapêutica multidimensional. Stack: Next.js 15 + FastAPI + Supabase + MQTT.
+# AXIS CORE™ — Mobile App
+### React Native · Expo SDK 52 · iOS + Android
 
 ---
 
-## Pré-requisitos
+## Stack Técnico
 
+| Camada | Tecnologia |
+|---|---|
+| Framework | Expo SDK 52 + Expo Router v4 |
+| UI | NativeWind v4 (Tailwind para RN) |
+| Animações | React Native Reanimated 3 |
+| Gestos | React Native Gesture Handler |
+| Câmera/PPG | React Native Vision Camera v4 |
+| Gráficos SVG | React Native SVG + Skia |
+| Auth | Supabase JS + Expo SecureStore |
+| State | Zustand + MMKV (persistência) |
+| Haptics | Expo Haptics |
+| Build | EAS Build (Expo Application Services) |
+
+---
+
+## Arquitetura de Arquivos
+
+```
+axis-core-mobile/
+├── app/
+│   ├── _layout.tsx              # Root layout + auth gate
+│   ├── auth/
+│   │   └── login.tsx            # Login + demo roles
+│   ├── (tabs)/
+│   │   ├── _layout.tsx          # Tab navigator por role
+│   │   ├── index.tsx            # Dashboard (todos os roles)
+│   │   ├── sessions.tsx         # Terapeuta: sessões
+│   │   ├── engine.tsx           # Terapeuta: engine AXIS™
+│   │   ├── clients.tsx          # Terapeuta: clientes
+│   │   ├── ai.tsx               # Terapeuta: IA supervisora
+│   │   ├── chakras.tsx          # Cliente: campo energético
+│   │   ├── history.tsx          # Cliente: histórico
+│   │   ├── schedule.tsx         # Cliente: agendamento
+│   │   ├── reports.tsx          # Cliente: relatórios
+│   │   ├── courses.tsx          # Aluno: cursos
+│   │   ├── progress.tsx         # Aluno: progressão
+│   │   └── certs.tsx            # Aluno: certificados
+│   └── session/
+│       └── live.tsx             # Sessão ao vivo + PPG + Engine
+├── lib/
+│   ├── supabase/
+│   │   └── client.ts            # Supabase + SecureStore adapter
+│   ├── store/
+│   │   └── auth.ts              # Zustand + MMKV auth store
+│   └── ppg/
+│       └── engine.ts            # PPG signal processor
+├── components/                   # Componentes reutilizáveis
+├── app.json                      # Expo config
+├── eas.json                      # EAS Build config
+├── babel.config.js               # Babel + NativeWind
+├── metro.config.js               # Metro + NativeWind
+├── tailwind.config.js            # Tailwind tokens
+└── global.css                    # NativeWind entry
+```
+
+---
+
+## Setup Local
+
+### Pré-requisitos
 - Node.js >= 20
-- pnpm >= 9 (`npm install -g pnpm`)
-- Python 3.12
-- Docker + Docker Compose
-- Conta Supabase (gratuita em supabase.com)
+- pnpm ou npm
+- Expo CLI: `npm install -g expo-cli eas-cli`
+- Para iOS: Xcode + Simulator
+- Para Android: Android Studio + Emulator
 
----
-
-## Setup em 5 passos
-
-### 1. Clone e instale dependências
+### 1. Instalar dependências
 
 ```bash
-git clone https://github.com/seu-usuario/axis-core.git
-cd axis-core
-pnpm install
+cd axis-core-mobile
+npm install
 ```
 
-### 2. Configure variáveis de ambiente
+### 2. Configurar Supabase
+
+Crie o arquivo `.env.local`:
+```bash
+EXPO_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON=SUA-ANON-KEY
+```
+
+### 3. Rodar em desenvolvimento
 
 ```bash
-cp .env.example apps/frontend/.env.local
-cp .env.example apps/backend/.env
+# iOS Simulator
+npx expo start --ios
+
+# Android Emulator
+npx expo start --android
+
+# Expo Go (mais simples, sem Vision Camera)
+npx expo start
 ```
 
-Edite os dois arquivos com suas credenciais Supabase.
+---
 
-### 3. Execute o schema no Supabase
+## Build com EAS
 
-No Supabase Dashboard → SQL Editor → New Query:
-
-```
-Cole o conteúdo de: infra/supabase/migrations/001_initial_schema.sql
-```
-
-Clique em **Run**.
-
-### 4. Suba os serviços de infraestrutura
-
+### Development Build (físico)
 ```bash
-cd infra
-docker-compose up -d
+eas build --platform ios --profile development
+eas build --platform android --profile development
 ```
 
-Isso inicia:
-- MQTT broker (EMQX) em `localhost:1883`
-- Redis em `localhost:6379`
-- Backend FastAPI em `localhost:8000`
-
-### 5. Inicie o frontend
-
+### Preview (APK direto)
 ```bash
-cd apps/frontend
-pnpm dev
+eas build --platform android --profile preview
 ```
 
-Acesse: `http://localhost:3000`
+### Produção (App Store / Play Store)
+```bash
+# Configurar credenciais primeiro
+eas credentials
 
----
+# Build produção
+eas build --platform all --profile production
 
-## Estrutura do Projeto
-
-```
-axis-core/
-├── apps/
-│   ├── frontend/        Next.js 15 + TypeScript + Tailwind
-│   └── backend/         FastAPI + Python 3.12
-├── packages/
-│   ├── core/            Tipos TypeScript compartilhados
-│   ├── engine/          AxisEngine modular (JSON tables)
-│   └── shared/          Utilitários comuns
-├── infra/
-│   ├── docker-compose.yml
-│   └── supabase/migrations/
-└── docs/
+# Submit
+eas submit --platform ios
+eas submit --platform android
 ```
 
 ---
 
-## API
+## Funcionalidades por Role
 
-Com o backend rodando, acesse a documentação em:
+### Admin
+- Overview com KPIs e activity feed
+- System health em tempo real
 
-```
-http://localhost:8000/docs
-```
+### Terapeuta ✦ COMPLETO
+- Dashboard com sessões do dia
+- **Sessão Ao Vivo**: PPG biometria via câmera + engine + chakras + IA
+- Engine AXIS™: 8 mesas com controle MQTT
+- Clientes: lista com busca + expandir detalhes
+- IA Supervisora: 4 modos (análise, protocolo, relatório, recomendações)
 
-Endpoints principais:
+### Cliente
+- Dashboard com próxima sessão e chakras
+- Campo energético: mandala SVG + barras por chakra
+- Histórico: trend de coerência + detalhe expandido
+- Agendamento: wizard 4 etapas (data → horário → mesa → confirmar)
+- Relatórios: download PDF + compartilhar
 
-| Método | Endpoint                        | Descrição               |
-|--------|---------------------------------|-------------------------|
-| POST   | `/api/v1/auth/signup`           | Criar conta             |
-| POST   | `/api/v1/auth/signin`           | Login                   |
-| GET    | `/api/v1/users/me`              | Perfil próprio          |
-| GET    | `/api/v1/clients/`              | Listar clientes         |
-| POST   | `/api/v1/sessions/`             | Criar sessão            |
-| POST   | `/api/v1/sessions/{id}/start`   | Iniciar sessão          |
-| POST   | `/api/v1/engine/command`        | Comando MQTT para mesa  |
-| WS     | `/ws/session/{id}`              | Stream em tempo real    |
-
----
-
-## Deploy
-
-| Camada   | Plataforma     | Comando/Config             |
-|----------|----------------|----------------------------|
-| Frontend | Vercel         | `vercel --prod`            |
-| Backend  | Render         | `render.yaml` na raiz      |
-| Banco    | Supabase       | SQL migration executado    |
-| MQTT     | EMQX Cloud     | Variáveis MQTT no `.env`   |
-| Cache    | Upstash Redis  | `REDIS_URL` no `.env`      |
+### Aluno
+- Cursos: lista com módulos expandíveis, next module destacado
+- Progressão: streak semanal, gráfico mensal, trilha de aprendizado
+- Certificados: visualização + PDF + compartilhar (Share API nativa)
 
 ---
 
-## AxisEngine — Adicionar nova mesa
+## PPG Biometria (Sessão Ao Vivo)
 
-Crie um arquivo JSON em `packages/engine/src/tables/`:
+A tela `session/live.tsx` usa:
 
-```json
-{
-  "id": "table-minha-mesa-v1",
-  "slug": "minha-mesa",
-  "name": "Minha Mesa",
-  "type": "frequencies",
-  "version": "1.0.0",
-  "description": "Descrição da mesa",
-  "author": "Seu nome",
-  "parameters": [...],
-  "default_steps": [...],
-  "mqtt_topics": { "start": "axis/minha-mesa/start", ... },
-  "capabilities": { "realtime": true, "physical_device": false, ... }
-}
+1. **React Native Vision Camera** para acesso à câmera frontal
+2. **PPGEngineJS** (lib/ppg/engine.ts) para processar frames
+3. Extrai canal verde (G) de ROI central 80×80px
+4. Calcula BPM via detecção de picos
+5. Calcula RMSSD (HRV), coerência cardíaca e índice de stress
+6. Renderiza waveform em SVG via react-native-svg
+7. **Fallback demo**: simula sinal PPG se câmera não disponível
+
+**Como usar:**
+- Abra a sessão ao vivo
+- Ative a câmera
+- Posicione o dedo indicador sobre a câmera frontal **cobrindo completamente a lente**
+- Aguarde 15-30 segundos para estabilização do sinal
+- O indicador ROI ficará verde quando o sinal estiver bom
+
+---
+
+## Navegação por Role
+
+O router detecta o role automaticamente após login:
+
 ```
-
-Registre em `packages/engine/src/index.ts`:
-```typescript
-import('./tables/minha-mesa.json')
+admin     → tabs: Overview, Tenants, Terapeutas, Auditoria, Sistema
+therapist → tabs: Dashboard, Sessões, Engine, Clientes, IA
+client    → tabs: Início, Campo, Histórico, Agendar, Relatórios
+student   → tabs: Biblioteca, Meus Cursos, Progressão, Certificados
 ```
 
 ---
 
-## Aviso
+## Haptics
 
-> Ferramenta complementar de desenvolvimento pessoal. Não substitui acompanhamento médico, psicológico ou profissional de saúde licenciado.
+Todos os toques incluem feedback tátil:
+- `selectionAsync()` — navegação entre abas/itens
+- `impactAsync(Light)` — ações secundárias
+- `impactAsync(Medium)` — ações primárias (iniciar sessão, engine)
+- `notificationAsync(Success)` — confirmações
+- `notificationAsync(Error)` — erros
+
+---
+
+## Estéticas por Role
+
+| Role | Background | Accent | Tipografia |
+|---|---|---|---|
+| Admin | #040507 (terminal preto) | #00ff80 (verde) | Share Tech Mono |
+| Terapeuta | #06080f (dark navy) | #a5b4fc (indigo) | DM Mono + Syne |
+| Cliente | #07060f (dark violet) | #b49dff (violeta) | Cormorant Garamond |
+| Aluno | #f5f0e8 (pergaminho) | #c4962a (dourado) | Cinzel + Libre Baskerville |
+
+---
+
+> **Disclaimer:** Ferramenta complementar de desenvolvimento pessoal e terapêutico. Não substitui acompanhamento médico, psicológico ou profissional de saúde licenciado.
