@@ -1,0 +1,897 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── TOKENS ───────────────────────────────────────────────────────────────────
+const T = {
+  parchment: "#f5f0e8",
+  cream:     "#ede6d6",
+  warm:      "#e0d5c0",
+  sepia:     "#8b7355",
+  sepiaLight:"rgba(139,115,85,0.5)",
+  sepiaFaint:"rgba(139,115,85,0.15)",
+  ink:       "#2c2416",
+  inkLight:  "#4a3f2e",
+  inkFaint:  "rgba(44,36,22,0.45)",
+  gold:      "#c4962a",
+  goldLight: "#e8b84b",
+  goldFaint: "rgba(196,150,42,0.15)",
+  goldBorder:"rgba(196,150,42,0.3)",
+  crimson:   "#8b2635",
+  teal:      "#1a6b5a",
+  violet:    "#5a3a7e",
+  border:    "rgba(139,115,85,0.2)",
+  border2:   "rgba(139,115,85,0.35)",
+};
+
+const serif   = "'IM Fell English', 'Palatino Linotype', Georgia, serif";
+const display = "'Cinzel Decorative', 'Palatino', serif";
+const body    = "'Libre Baskerville', 'Book Antiqua', Georgia, serif";
+const mono    = "'DM Mono', 'Courier New', monospace";
+
+// ─── COURSE DATA ──────────────────────────────────────────────────────────────
+const COURSES = [
+  {
+    id:"c-001",
+    title:"Fundamentos do Campo Quântico",
+    subtitle:"Bases teóricas e práticas do AXIS CORE™",
+    instructor:"Marcia Britto RQH",
+    level:"Iniciante", levelColor:T.teal,
+    duration:"4h 30min", modules:8,
+    progress:100, completed:true, certified:true,
+    certificate_date:"2025-03-15",
+    description:"Introdução completa aos princípios do trabalho com campos energéticos, frequências e biometria aplicada.",
+    badge:"◈",
+    color:T.teal,
+    modules_data:[
+      { id:"m-001-1", title:"Introdução ao Campo Quântico",      duration:"28min", type:"video",  done:true  },
+      { id:"m-001-2", title:"Princípios de Frequência e Vibração",duration:"35min", type:"video",  done:true  },
+      { id:"m-001-3", title:"Apostila: Fundamentos Teóricos",    duration:"45min", type:"pdf",    done:true  },
+      { id:"m-001-4", title:"Biometria — HRV e Coerência",       duration:"32min", type:"video",  done:true  },
+      { id:"m-001-5", title:"Prática Supervisionada I",          duration:"60min", type:"live",   done:true  },
+      { id:"m-001-6", title:"Apostila: Protocolos Iniciais",     duration:"30min", type:"pdf",    done:true  },
+      { id:"m-001-7", title:"Avaliação Teórica",                 duration:"20min", type:"quiz",   done:true  },
+      { id:"m-001-8", title:"Prática Supervisionada II",         duration:"60min", type:"live",   done:true  },
+    ],
+  },
+  {
+    id:"c-002",
+    title:"Engine Multidimensional",
+    subtitle:"Operação avançada das mesas AXIS CORE™",
+    instructor:"Marcia Britto RQH",
+    level:"Intermediário", levelColor:T.gold,
+    duration:"6h 15min", modules:12,
+    progress:67, completed:false, certified:false,
+    description:"Domínio completo do AxisEngine — configuração, protocolos e integração com dispositivos físicos.",
+    badge:"⬡",
+    color:T.gold,
+    modules_data:[
+      { id:"m-002-1",  title:"Visão Geral do AxisEngine",          duration:"22min", type:"video",  done:true  },
+      { id:"m-002-2",  title:"Mesa Hado Quantum — Configuração",   duration:"38min", type:"video",  done:true  },
+      { id:"m-002-3",  title:"Mesa de Frequências — Prática",      duration:"45min", type:"video",  done:true  },
+      { id:"m-002-4",  title:"Apostila: Protocolos Frequenciais",  duration:"50min", type:"pdf",    done:true  },
+      { id:"m-002-5",  title:"Mesa de Chakras — Mapeamento",       duration:"40min", type:"video",  done:true  },
+      { id:"m-002-6",  title:"Máquina Radiônica — Fundamentos",    duration:"35min", type:"video",  done:true  },
+      { id:"m-002-7",  title:"Prática Supervisionada I",           duration:"60min", type:"live",   done:true  },
+      { id:"m-002-8",  title:"Mesa Multidimensional",              duration:"42min", type:"video",  done:false },
+      { id:"m-002-9",  title:"MQTT e Dispositivos Físicos",        duration:"30min", type:"video",  done:false },
+      { id:"m-002-10", title:"Apostila: Integração Avançada",      duration:"45min", type:"pdf",    done:false },
+      { id:"m-002-11", title:"Avaliação Prática",                  duration:"30min", type:"quiz",   done:false },
+      { id:"m-002-12", title:"Prática Supervisionada Final",       duration:"90min", type:"live",   done:false },
+    ],
+  },
+  {
+    id:"c-003",
+    title:"IA Supervisora — Aplicações Clínicas",
+    subtitle:"Inteligência artificial aplicada à terapia",
+    instructor:"Staff AXIS CORE™",
+    level:"Avançado", levelColor:T.crimson,
+    duration:"5h 00min", modules:10,
+    progress:0, completed:false, certified:false,
+    description:"Uso da IA Claude na supervisão de sessões, geração de relatórios e recomendações de protocolo.",
+    badge:"✦",
+    color:T.crimson,
+    locked:true,
+    unlock_requirement:"Conclua Engine Multidimensional",
+    modules_data:[],
+  },
+  {
+    id:"c-004",
+    title:"Radiônica & Ancestralidade",
+    subtitle:"Trabalho com linhagens e campos morfogenéticos",
+    instructor:"Marcia Britto RQH",
+    level:"Avançado", levelColor:T.violet,
+    duration:"7h 30min", modules:14,
+    progress:0, completed:false, certified:false,
+    description:"Técnicas avançadas de trabalho radiônico com foco em linhagens ancestrais e campos morfogenéticos.",
+    badge:"⌘",
+    color:T.violet,
+    locked:true,
+    unlock_requirement:"Conclua Engine Multidimensional",
+    modules_data:[],
+  },
+];
+
+const STUDENT = {
+  name:"Ana Oliveira",
+  since:"Janeiro 2025",
+  total_hours:10.75,
+  completed_courses:1,
+  certificates:1,
+  current_streak:7,
+  level:"Praticante",
+};
+
+// ─── ORNAMENT SVG ─────────────────────────────────────────────────────────────
+function OrnamentDivider({ color = T.gold }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, margin:"6px 0" }}>
+      <div style={{ flex:1, height:1, background:`linear-gradient(to right, transparent, ${color}44)` }} />
+      <span style={{ color:`${color}88`, fontSize:12 }}>✦</span>
+      <div style={{ flex:1, height:1, background:`linear-gradient(to left, transparent, ${color}44)` }} />
+    </div>
+  );
+}
+
+function CornerOrnament({ size=20, color=T.gold }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <path d="M2 18 L2 2 L18 2" stroke={`${color}66`} strokeWidth="1" fill="none"/>
+      <path d="M2 2 L6 6" stroke={`${color}44`} strokeWidth="1"/>
+      <circle cx="2" cy="2" r="1.5" fill={`${color}88`}/>
+    </svg>
+  );
+}
+
+// ─── PARCHMENT CARD ───────────────────────────────────────────────────────────
+function Parchment({ children, style={}, onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      background:`linear-gradient(135deg, ${T.parchment} 0%, ${T.cream} 50%, ${T.warm} 100%)`,
+      border:`1px solid ${T.border2}`,
+      borderRadius:4,
+      boxShadow:"0 2px 12px rgba(44,36,22,0.12), inset 0 1px 0 rgba(255,255,255,0.6)",
+      position:"relative",
+      overflow:"hidden",
+      ...style,
+      cursor: onClick ? "pointer" : "default",
+    }}>
+      {/* Subtle texture overlay */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", opacity:0.03,
+        backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")` }} />
+      {children}
+    </div>
+  );
+}
+
+// ─── TYPE BADGE ───────────────────────────────────────────────────────────────
+function TypeBadge({ type }) {
+  const map = {
+    video: { icon:"▶", label:"Vídeo",   color:T.teal   },
+    pdf:   { icon:"▦", label:"Apostila",color:T.sepia  },
+    live:  { icon:"◎", label:"Ao Vivo", color:T.crimson },
+    quiz:  { icon:"◈", label:"Avaliação",color:T.violet },
+  };
+  const m = map[type] || map.video;
+  return (
+    <span style={{ fontFamily:mono, fontSize:9, padding:"2px 7px", borderRadius:3,
+      background:`${m.color}12`, border:`1px solid ${m.color}33`, color:m.color,
+      letterSpacing:"0.06em", display:"inline-flex", alignItems:"center", gap:4 }}>
+      {m.icon} {m.label.toUpperCase()}
+    </span>
+  );
+}
+
+// ─── CERTIFICATE ──────────────────────────────────────────────────────────────
+function Certificate({ course, student, onClose }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setTimeout(()=>setMounted(true), 50); }, []);
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(44,36,22,0.85)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:24, backdropFilter:"blur(8px)" }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{ width:"100%", maxWidth:680, opacity:mounted?1:0, transform:mounted?"scale(1)":"scale(0.92)", transition:"all 0.4s cubic-bezier(0.16,1,0.3,1)" }}>
+
+        {/* Certificate */}
+        <div style={{
+          background:`linear-gradient(135deg, ${T.parchment}, ${T.cream})`,
+          border:`3px double ${T.goldBorder}`,
+          padding:"40px 48px",
+          position:"relative",
+          boxShadow:"0 24px 80px rgba(0,0,0,0.5), inset 0 0 60px rgba(196,150,42,0.05)",
+        }}>
+          {/* Corner ornaments */}
+          {[{t:8,l:8,r:"0deg"},{t:8,r:8,rt:"90deg"},{b:8,l:8,rt:"-90deg"},{b:8,r:8,rt:"180deg"}].map((pos,i) => (
+            <div key={i} style={{ position:"absolute", top:pos.t, bottom:pos.b, left:pos.l, right:pos.r, transform:`rotate(${pos.rt||"0deg"})` }}>
+              <CornerOrnament size={28} color={T.gold} />
+            </div>
+          ))}
+
+          {/* Inner border */}
+          <div style={{ border:`1px solid ${T.goldBorder}`, padding:"28px 32px", position:"relative" }}>
+            {/* Header */}
+            <div style={{ textAlign:"center", marginBottom:20 }}>
+              <p style={{ fontFamily:display, fontSize:11, color:T.gold, letterSpacing:"0.3em", marginBottom:8 }}>AXIS CORE™</p>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12, marginBottom:6 }}>
+                <div style={{ flex:1, height:1, background:T.goldBorder }} />
+                <span style={{ color:T.gold, fontSize:16 }}>✦</span>
+                <div style={{ flex:1, height:1, background:T.goldBorder }} />
+              </div>
+              <h1 style={{ fontFamily:display, fontSize:20, color:T.ink, letterSpacing:"0.1em", lineHeight:1.3 }}>
+                Certificado de Conclusão
+              </h1>
+            </div>
+
+            <OrnamentDivider color={T.gold} />
+
+            <div style={{ textAlign:"center", margin:"20px 0" }}>
+              <p style={{ fontFamily:serif, fontSize:13, color:T.sepia, marginBottom:10, fontStyle:"italic" }}>
+                Certificamos que
+              </p>
+              <p style={{ fontFamily:display, fontSize:22, color:T.ink, letterSpacing:"0.05em", marginBottom:10 }}>
+                {student.name}
+              </p>
+              <p style={{ fontFamily:serif, fontSize:13, color:T.sepia, fontStyle:"italic", marginBottom:6 }}>
+                concluiu com aproveitamento o curso
+              </p>
+              <p style={{ fontFamily:display, fontSize:15, color:T.gold, letterSpacing:"0.06em", marginBottom:4 }}>
+                {course.title}
+              </p>
+              <p style={{ fontFamily:serif, fontSize:12, color:T.sepia, fontStyle:"italic" }}>
+                {course.subtitle}
+              </p>
+            </div>
+
+            <OrnamentDivider color={T.sepia} />
+
+            {/* Details */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, margin:"16px 0", textAlign:"center" }}>
+              {[
+                ["Carga Horária", course.duration],
+                ["Instrutor/a", course.instructor],
+                ["Data de Conclusão", new Date(course.certificate_date||Date.now()).toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})],
+              ].map(([k,v]) => (
+                <div key={k}>
+                  <p style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.1em", marginBottom:3 }}>{k.toUpperCase()}</p>
+                  <p style={{ fontFamily:body, fontSize:11, color:T.inkLight }}>{v}</p>
+                </div>
+              ))}
+            </div>
+
+            <OrnamentDivider color={T.gold} />
+
+            {/* Signature area */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginTop:20 }}>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ borderTop:`1px solid ${T.sepia}55`, paddingTop:6, width:140 }}>
+                  <p style={{ fontFamily:serif, fontSize:11, color:T.sepia, fontStyle:"italic" }}>{course.instructor}</p>
+                  <p style={{ fontFamily:mono, fontSize:9, color:T.sepiaLight, letterSpacing:"0.08em" }}>INSTRUTOR/A</p>
+                </div>
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ width:48, height:48, borderRadius:"50%", background:T.goldFaint, border:`2px solid ${T.goldBorder}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 6px" }}>
+                  <span style={{ fontFamily:display, fontSize:20, color:T.gold }}>A</span>
+                </div>
+                <p style={{ fontFamily:mono, fontSize:9, color:T.sepiaLight, letterSpacing:"0.08em" }}>AXIS CORE™</p>
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ borderTop:`1px solid ${T.sepia}55`, paddingTop:6, width:140 }}>
+                  <p style={{ fontFamily:serif, fontSize:11, color:T.sepia, fontStyle:"italic" }}>
+                    {student.name}
+                  </p>
+                  <p style={{ fontFamily:mono, fontSize:9, color:T.sepiaLight, letterSpacing:"0.08em" }}>ALUNO/A</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Certificate ID */}
+            <div style={{ textAlign:"center", marginTop:16 }}>
+              <p style={{ fontFamily:mono, fontSize:9, color:T.sepiaLight, letterSpacing:"0.1em" }}>
+                ID: AXIS-{course.id.toUpperCase()}-{student.name.replace(/\s/g,"").toUpperCase().slice(0,4)}-2025
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display:"flex", gap:10, justifyContent:"center", marginTop:16 }}>
+          <button onClick={()=>navigator.clipboard.writeText(window.location.href)} style={{ fontFamily:mono, fontSize:11, padding:"9px 20px", background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.7)", borderRadius:4, cursor:"pointer", letterSpacing:"0.08em" }}>
+            ↗ COMPARTILHAR
+          </button>
+          <button style={{ fontFamily:mono, fontSize:11, padding:"9px 20px", background:T.goldFaint, border:`1px solid ${T.goldBorder}`, color:T.gold, borderRadius:4, cursor:"pointer", letterSpacing:"0.08em" }}>
+            ⬇ BAIXAR PDF
+          </button>
+          <button onClick={onClose} style={{ fontFamily:mono, fontSize:11, padding:"9px 20px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.4)", borderRadius:4, cursor:"pointer", letterSpacing:"0.08em" }}>
+            FECHAR
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+const TABS = [
+  { id:"library",   label:"Biblioteca",   icon:"⬡" },
+  { id:"my_courses",label:"Meus Cursos",  icon:"◈" },
+  { id:"progress",  label:"Progressão",   icon:"∆" },
+  { id:"certs",     label:"Certificados", icon:"✦" },
+];
+
+function Sidebar({ active, onChange, student }) {
+  return (
+    <div style={{ width:200, background:`linear-gradient(to bottom, ${T.ink}, #1a1408)`, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", flexShrink:0, minHeight:"100vh" }}>
+      {/* Logo */}
+      <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid rgba(196,150,42,0.15)` }}>
+        <p style={{ fontFamily:display, fontSize:13, color:T.gold, letterSpacing:"0.2em", marginBottom:2 }}>AXIS</p>
+        <p style={{ fontFamily:display, fontSize:10, color:`${T.gold}88`, letterSpacing:"0.15em", marginBottom:10 }}>CORE™ · ACADEMIA</p>
+        <OrnamentDivider color={T.gold} />
+      </div>
+
+      {/* Student info */}
+      <div style={{ padding:"16px 20px", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ width:40, height:40, borderRadius:"50%", background:T.goldFaint, border:`1px solid ${T.goldBorder}`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:8 }}>
+          <span style={{ fontFamily:display, fontSize:16, color:T.gold }}>{student.name[0]}</span>
+        </div>
+        <p style={{ fontFamily:body, fontSize:13, color:T.parchment, marginBottom:2 }}>{student.name}</p>
+        <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, letterSpacing:"0.06em" }}>{student.level.toUpperCase()}</p>
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex:1, padding:"12px 10px" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{
+            width:"100%", padding:"10px 14px", marginBottom:2,
+            display:"flex", alignItems:"center", gap:10,
+            background: active===t.id ? T.goldFaint : "transparent",
+            border:`1px solid ${active===t.id ? T.goldBorder : "transparent"}`,
+            borderRadius:4, cursor:"pointer", textAlign:"left", transition:"all 0.2s",
+          }}>
+            <span style={{ color: active===t.id ? T.gold : T.sepia, fontSize:14 }}>{t.icon}</span>
+            <span style={{ fontFamily:body, fontSize:13, color: active===t.id ? T.parchment : T.sepia }}>
+              {t.label}
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Stats */}
+      <div style={{ padding:"16px 20px", borderTop:`1px solid ${T.border}` }}>
+        <OrnamentDivider color={T.sepia} />
+        {[
+          ["Horas",     student.total_hours + "h"],
+          ["Cursos",    student.completed_courses + " concluído" + (student.completed_courses!==1?"s":"")],
+          ["Sequência", student.current_streak + " dias"],
+        ].map(([k,v]) => (
+          <div key={k} style={{ display:"flex", justifyContent:"space-between", marginTop:8 }}>
+            <span style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.08em" }}>{k.toUpperCase()}</span>
+            <span style={{ fontFamily:body, fontSize:11, color:T.goldLight }}>{v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── LIBRARY ──────────────────────────────────────────────────────────────────
+function Library({ onSelectCourse }) {
+  const [hovered, setHovered] = useState(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setTimeout(()=>setMounted(true),80); }, []);
+
+  return (
+    <div style={{ flex:1, overflowY:"auto", padding:"32px 36px", background:T.parchment }}>
+      {/* Header */}
+      <div style={{ marginBottom:32, opacity:mounted?1:0, transform:mounted?"none":"translateY(12px)", transition:"all 0.5s" }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, letterSpacing:"0.18em", marginBottom:8 }}>AXIS CORE™ · ACADEMIA</p>
+        <h1 style={{ fontFamily:display, fontSize:28, color:T.ink, letterSpacing:"0.04em", lineHeight:1.2, marginBottom:6 }}>
+          Biblioteca de Cursos
+        </h1>
+        <OrnamentDivider color={T.gold} />
+        <p style={{ fontFamily:serif, fontSize:14, color:T.sepia, fontStyle:"italic", marginTop:8, lineHeight:1.7 }}>
+          "O conhecimento verdadeiro só surge quando teoria e prática se unem."
+        </p>
+      </div>
+
+      {/* Courses grid */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+        {COURSES.map((c, i) => (
+          <Parchment key={c.id}
+            onClick={()=>!c.locked && onSelectCourse(c)}
+            style={{ opacity: mounted?1:0, transform: mounted?"none":"translateY(16px)", transition:`all 0.5s ${i*0.08}s`, cursor:c.locked?"not-allowed":"pointer" }}
+          >
+            <div onMouseEnter={()=>setHovered(c.id)} onMouseLeave={()=>setHovered(null)}
+              style={{ padding:"20px 22px", opacity:c.locked?0.65:1 }}>
+              {/* Corner ornaments */}
+              <div style={{ position:"absolute", top:6, left:6 }}><CornerOrnament size={16} color={c.color} /></div>
+              <div style={{ position:"absolute", top:6, right:6, transform:"rotate(90deg)" }}><CornerOrnament size={16} color={c.color} /></div>
+
+              {/* Badge */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                <div style={{ width:36, height:36, borderRadius:4, background:`${c.color}15`, border:`1px solid ${c.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:c.color }}>
+                  {c.badge}
+                </div>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  {c.completed && <span style={{ fontFamily:mono, fontSize:9, color:T.teal, background:`${T.teal}12`, border:`1px solid ${T.teal}33`, padding:"2px 6px", borderRadius:3 }}>✓ CONCLUÍDO</span>}
+                  {c.locked && <span style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>🔒 BLOQUEADO</span>}
+                  <span style={{ fontFamily:mono, fontSize:9, color:c.levelColor, background:`${c.levelColor}12`, border:`1px solid ${c.levelColor}33`, padding:"2px 6px", borderRadius:3 }}>{c.level.toUpperCase()}</span>
+                </div>
+              </div>
+
+              <h3 style={{ fontFamily:display, fontSize:14, color:T.ink, lineHeight:1.3, marginBottom:4, letterSpacing:"0.03em" }}>{c.title}</h3>
+              <p style={{ fontFamily:serif, fontSize:11, fontStyle:"italic", color:T.sepia, marginBottom:10, lineHeight:1.5 }}>{c.subtitle}</p>
+
+              <OrnamentDivider color={c.locked?T.sepia:c.color} />
+
+              <div style={{ display:"flex", gap:16, marginTop:8, marginBottom:10 }}>
+                <span style={{ fontFamily:mono, fontSize:10, color:T.sepia }}>▶ {c.modules} módulos</span>
+                <span style={{ fontFamily:mono, fontSize:10, color:T.sepia }}>⏱ {c.duration}</span>
+              </div>
+
+              {/* Progress bar */}
+              {!c.locked && (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.06em" }}>PROGRESSO</span>
+                    <span style={{ fontFamily:mono, fontSize:9, color:c.color }}>{c.progress}%</span>
+                  </div>
+                  <div style={{ height:3, background:T.sepiaFaint, borderRadius:0 }}>
+                    <div style={{ height:"100%", width:`${c.progress}%`, background:`linear-gradient(to right, ${c.color}88, ${c.color})`, transition:"width 1s ease" }} />
+                  </div>
+                </div>
+              )}
+
+              {c.locked && (
+                <p style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.06em", marginTop:8 }}>
+                  REQUER: {c.unlock_requirement.toUpperCase()}
+                </p>
+              )}
+            </div>
+          </Parchment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── COURSE DETAIL ────────────────────────────────────────────────────────────
+function CourseDetail({ course, onBack }) {
+  const [activeModule, setActiveModule] = useState(null);
+  const [cert, setCert] = useState(false);
+  const done = course.modules_data.filter(m=>m.done).length;
+  const total = course.modules_data.length;
+
+  return (
+    <div style={{ flex:1, overflowY:"auto", background:T.parchment }}>
+      {cert && <Certificate course={course} student={STUDENT} onClose={()=>setCert(false)} />}
+
+      {/* Hero */}
+      <div style={{ background:`linear-gradient(135deg, ${T.ink} 0%, #2a1f10 100%)`, padding:"32px 36px 28px", position:"relative", overflow:"hidden" }}>
+        {/* Ornamental background */}
+        <div style={{ position:"absolute", inset:0, opacity:0.04 }}>
+          {[...Array(6)].map((_,i) => (
+            <div key={i} style={{ position:"absolute", top:`${i*20}%`, left:`${i*15}%`, width:200, height:200, borderRadius:"50%", border:`1px solid ${T.gold}` }} />
+          ))}
+        </div>
+        <div style={{ position:"relative" }}>
+          <button onClick={onBack} style={{ fontFamily:mono, fontSize:10, color:T.sepia, background:"transparent", border:`1px solid ${T.border}`, padding:"5px 12px", borderRadius:3, cursor:"pointer", letterSpacing:"0.1em", marginBottom:20 }}>
+            ← BIBLIOTECA
+          </button>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+                <span style={{ fontFamily:mono, fontSize:10, color:course.levelColor, background:`${course.levelColor}18`, border:`1px solid ${course.levelColor}33`, padding:"2px 8px", borderRadius:3, letterSpacing:"0.1em" }}>{course.level.toUpperCase()}</span>
+                {course.completed && <span style={{ fontFamily:mono, fontSize:10, color:T.teal, background:`${T.teal}18`, border:`1px solid ${T.teal}33`, padding:"2px 8px", borderRadius:3 }}>✓ CONCLUÍDO</span>}
+              </div>
+              <h1 style={{ fontFamily:display, fontSize:20, color:T.parchment, letterSpacing:"0.05em", lineHeight:1.3, marginBottom:6 }}>{course.title}</h1>
+              <p style={{ fontFamily:serif, fontSize:13, fontStyle:"italic", color:T.sepia, marginBottom:12 }}>{course.subtitle}</p>
+              <p style={{ fontFamily:body, fontSize:13, color:`${T.parchment}99`, lineHeight:1.7, maxWidth:500 }}>{course.description}</p>
+            </div>
+            <div style={{ textAlign:"center", flexShrink:0 }}>
+              <div style={{ width:80, height:80, borderRadius:4, background:T.goldFaint, border:`2px solid ${T.goldBorder}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:40, color:course.color, marginBottom:8 }}>
+                {course.badge}
+              </div>
+              <div style={{ fontFamily:display, fontSize:22, color:T.gold }}>{course.progress}%</div>
+              <div style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>PROGRESSO</div>
+            </div>
+          </div>
+
+          <div style={{ display:"flex", gap:24, marginTop:16 }}>
+            {[["Módulos",`${done}/${total}`],["Duração",course.duration],["Instrutor",course.instructor]].map(([k,v])=>(
+              <div key={k}>
+                <div style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.1em", marginBottom:3 }}>{k.toUpperCase()}</div>
+                <div style={{ fontFamily:body, fontSize:13, color:T.warm }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height:4, background:T.warm }}>
+        <div style={{ height:"100%", width:`${course.progress}%`, background:`linear-gradient(to right, ${course.color}88, ${course.color})`, transition:"width 1s" }} />
+      </div>
+
+      {/* Modules */}
+      <div style={{ padding:"28px 36px" }}>
+        <div style={{ marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <h2 style={{ fontFamily:display, fontSize:16, color:T.ink, letterSpacing:"0.06em" }}>Módulos do Curso</h2>
+          {course.completed && (
+            <button onClick={()=>setCert(true)} style={{ fontFamily:mono, fontSize:11, padding:"8px 18px", background:T.goldFaint, border:`1px solid ${T.goldBorder}`, color:T.gold, borderRadius:3, cursor:"pointer", letterSpacing:"0.08em" }}>
+              ✦ VER CERTIFICADO
+            </button>
+          )}
+        </div>
+        <OrnamentDivider color={T.gold} />
+
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:16 }}>
+          {course.modules_data.map((m, i) => {
+            const isActive = activeModule === m.id;
+            const isNext = !m.done && (i===0 || course.modules_data[i-1].done);
+            return (
+              <div key={m.id}>
+                <Parchment onClick={()=>setActiveModule(isActive?null:m.id)}
+                  style={{ border: isActive ? `1px solid ${course.color}44` : `1px solid ${T.border}`, cursor:m.done||isNext?"pointer":"default", opacity:!m.done&&!isNext?0.5:1 }}>
+                  <div style={{ padding:"12px 16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                      {/* Status icon */}
+                      <div style={{ width:28, height:28, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                        background: m.done ? `${T.teal}15` : isNext ? T.goldFaint : T.sepiaFaint,
+                        border:`1px solid ${m.done?T.teal:isNext?T.gold:T.sepia}44`,
+                      }}>
+                        <span style={{ fontSize:12, color:m.done?T.teal:isNext?T.gold:T.sepia }}>
+                          {m.done ? "✓" : isNext ? "▶" : String(i+1)}
+                        </span>
+                      </div>
+
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                          <span style={{ fontFamily:body, fontSize:13, color: m.done?T.ink:isNext?T.inkLight:T.sepia }}>{m.title}</span>
+                          {isNext && <span style={{ fontFamily:mono, fontSize:9, color:T.gold, background:T.goldFaint, border:`1px solid ${T.goldBorder}`, padding:"1px 6px", borderRadius:3 }}>PRÓXIMO</span>}
+                        </div>
+                        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                          <TypeBadge type={m.type} />
+                          <span style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>{m.duration}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded */}
+                    {isActive && (m.done||isNext) && (
+                      <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end" }}>
+                        <button style={{ fontFamily:mono, fontSize:11, padding:"7px 18px",
+                          background: m.done ? T.sepiaFaint : T.goldFaint,
+                          border:`1px solid ${m.done?T.border:T.goldBorder}`,
+                          color: m.done ? T.sepia : T.gold,
+                          borderRadius:3, cursor:"pointer", letterSpacing:"0.08em" }}>
+                          {m.done ? "↺ REVER" : "▶ INICIAR MÓDULO"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Parchment>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MY COURSES ───────────────────────────────────────────────────────────────
+function MyCourses({ onSelectCourse }) {
+  const enrolled = COURSES.filter(c => c.progress > 0);
+  return (
+    <div style={{ flex:1, overflowY:"auto", padding:"32px 36px", background:T.parchment }}>
+      <div style={{ marginBottom:28 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, letterSpacing:"0.18em", marginBottom:6 }}>APRENDIZADO EM CURSO</p>
+        <h1 style={{ fontFamily:display, fontSize:24, color:T.ink, letterSpacing:"0.04em" }}>Meus Cursos</h1>
+        <OrnamentDivider color={T.gold} />
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {enrolled.map(c => {
+          const done = c.modules_data.filter(m=>m.done).length;
+          const total = c.modules_data.length;
+          const nextModule = c.modules_data.find((m,i)=>!m.done&&(i===0||c.modules_data[i-1].done));
+          return (
+            <Parchment key={c.id} onClick={()=>onSelectCourse(c)} style={{ cursor:"pointer" }}>
+              <div style={{ padding:"18px 20px" }}>
+                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+                  <div style={{ width:44, height:44, borderRadius:4, background:`${c.color}12`, border:`1px solid ${c.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, color:c.color, flexShrink:0 }}>
+                    {c.badge}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+                      <h3 style={{ fontFamily:display, fontSize:14, color:T.ink, lineHeight:1.3, letterSpacing:"0.03em" }}>{c.title}</h3>
+                      <span style={{ fontFamily:display, fontSize:16, color:c.color, flexShrink:0, marginLeft:10 }}>{c.progress}%</span>
+                    </div>
+                    <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, marginBottom:8 }}>
+                      {done}/{total} módulos · {c.duration}
+                    </p>
+                    {/* Progress */}
+                    <div style={{ height:3, background:T.sepiaFaint, marginBottom:8 }}>
+                      <div style={{ height:"100%", width:`${c.progress}%`, background:`linear-gradient(to right,${c.color}77,${c.color})` }} />
+                    </div>
+                    {/* Next module */}
+                    {nextModule && !c.completed && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", background:`${c.color}08`, border:`1px solid ${c.color}22`, borderRadius:3 }}>
+                        <span style={{ color:c.color, fontSize:10 }}>▶</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:T.sepia }}>
+                          PRÓXIMO: {nextModule.title}
+                        </span>
+                        <TypeBadge type={nextModule.type} />
+                      </div>
+                    )}
+                    {c.completed && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ color:T.teal, fontSize:12 }}>✦</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:T.teal, letterSpacing:"0.08em" }}>CURSO CONCLUÍDO · CERTIFICADO DISPONÍVEL</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Parchment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── PROGRESS ─────────────────────────────────────────────────────────────────
+function Progress() {
+  const weekDays = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const streak = [false,true,true,true,true,true,true];
+  const totalModules = COURSES.reduce((a,c)=>a+c.modules_data.filter(m=>m.done).length,0);
+  const totalHours = (totalModules * 0.65).toFixed(1);
+
+  return (
+    <div style={{ flex:1, overflowY:"auto", padding:"32px 36px", background:T.parchment }}>
+      <div style={{ marginBottom:28 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, letterSpacing:"0.18em", marginBottom:6 }}>JORNADA DO CONHECIMENTO</p>
+        <h1 style={{ fontFamily:display, fontSize:24, color:T.ink, letterSpacing:"0.04em" }}>Sua Progressão</h1>
+        <OrnamentDivider color={T.gold} />
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+        {[
+          { label:"Horas Estudadas",  value:totalHours+"h",  color:T.gold    },
+          { label:"Módulos Feitos",   value:totalModules,    color:T.teal    },
+          { label:"Cursos Ativos",    value:COURSES.filter(c=>c.progress>0&&!c.completed).length, color:T.sepia },
+          { label:"Dias Consecutivos",value:STUDENT.current_streak+"d", color:T.crimson },
+        ].map(s => (
+          <Parchment key={s.label} style={{ padding:"16px 14px", textAlign:"center" }}>
+            <div style={{ fontFamily:display, fontSize:24, color:s.color, lineHeight:1, marginBottom:4 }}>{s.value}</div>
+            <div style={{ fontFamily:mono, fontSize:9, color:T.sepia, letterSpacing:"0.08em" }}>{s.label.toUpperCase()}</div>
+          </Parchment>
+        ))}
+      </div>
+
+      {/* Streak */}
+      <Parchment style={{ padding:"18px 20px", marginBottom:16 }}>
+        <p style={{ fontFamily:display, fontSize:12, color:T.ink, letterSpacing:"0.1em", marginBottom:12 }}>SEQUÊNCIA DESTA SEMANA</p>
+        <div style={{ display:"flex", gap:8 }}>
+          {weekDays.map((d,i) => (
+            <div key={d} style={{ flex:1, textAlign:"center" }}>
+              <div style={{ width:"100%", aspectRatio:"1", borderRadius:3, marginBottom:4,
+                background: streak[i] ? `${T.gold}22` : T.sepiaFaint,
+                border:`1px solid ${streak[i] ? T.goldBorder : T.border}`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:12, color: streak[i] ? T.gold : T.sepia,
+              }}>
+                {streak[i] ? "✦" : "·"}
+              </div>
+              <span style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>{d}</span>
+            </div>
+          ))}
+        </div>
+      </Parchment>
+
+      {/* Course progress bars */}
+      <Parchment style={{ padding:"18px 20px", marginBottom:16 }}>
+        <p style={{ fontFamily:display, fontSize:12, color:T.ink, letterSpacing:"0.1em", marginBottom:14 }}>PROGRESSO POR CURSO</p>
+        <OrnamentDivider color={T.sepia} />
+        <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:14 }}>
+          {COURSES.filter(c=>!c.locked).map(c => (
+            <div key={c.id}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <span style={{ fontFamily:body, fontSize:12, color:T.inkLight }}>{c.title}</span>
+                <span style={{ fontFamily:display, fontSize:13, color:c.color }}>{c.progress}%</span>
+              </div>
+              <div style={{ height:4, background:T.sepiaFaint, borderRadius:0 }}>
+                <div style={{ height:"100%", width:`${c.progress}%`, background:`linear-gradient(to right,${c.color}66,${c.color})`, transition:"width 1s ease" }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:3 }}>
+                <span style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>
+                  {c.modules_data.filter(m=>m.done).length}/{c.modules_data.length} módulos
+                </span>
+                {c.completed && <span style={{ fontFamily:mono, fontSize:9, color:T.teal }}>✓ COMPLETO</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Parchment>
+
+      {/* Learning path */}
+      <Parchment style={{ padding:"18px 20px" }}>
+        <p style={{ fontFamily:display, fontSize:12, color:T.ink, letterSpacing:"0.1em", marginBottom:14 }}>TRILHA DE APRENDIZADO</p>
+        <OrnamentDivider color={T.gold} />
+        <div style={{ position:"relative", paddingLeft:20, marginTop:14 }}>
+          <div style={{ position:"absolute", left:7, top:8, bottom:8, width:1, background:`linear-gradient(to bottom, ${T.gold}, ${T.sepia}44)` }} />
+          {COURSES.map((c,i) => (
+            <div key={c.id} style={{ display:"flex", gap:12, marginBottom:i<COURSES.length-1?16:0, position:"relative" }}>
+              <div style={{ width:14, height:14, borderRadius:"50%", flexShrink:0, marginTop:2,
+                background: c.completed?T.teal:c.progress>0?T.gold:T.sepiaFaint,
+                border:`1px solid ${c.completed?T.teal:c.progress>0?T.gold:T.border}`,
+                position:"relative", zIndex:1,
+              }} />
+              <div>
+                <p style={{ fontFamily:body, fontSize:12, color:c.locked?T.sepia:T.inkLight, marginBottom:2 }}>{c.title}</p>
+                <p style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>
+                  {c.completed ? "CONCLUÍDO" : c.progress>0 ? `EM CURSO · ${c.progress}%` : c.locked ? "BLOQUEADO" : "NÃO INICIADO"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Parchment>
+    </div>
+  );
+}
+
+// ─── CERTIFICATES ─────────────────────────────────────────────────────────────
+function Certificates() {
+  const [viewing, setViewing] = useState(null);
+  const earned = COURSES.filter(c=>c.certified);
+
+  return (
+    <div style={{ flex:1, overflowY:"auto", padding:"32px 36px", background:T.parchment }}>
+      {viewing && <Certificate course={viewing} student={STUDENT} onClose={()=>setViewing(null)} />}
+
+      <div style={{ marginBottom:28 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:T.sepia, letterSpacing:"0.18em", marginBottom:6 }}>CONQUISTAS ACADÊMICAS</p>
+        <h1 style={{ fontFamily:display, fontSize:24, color:T.ink, letterSpacing:"0.04em" }}>Certificados</h1>
+        <OrnamentDivider color={T.gold} />
+      </div>
+
+      {earned.length === 0 ? (
+        <Parchment style={{ padding:40, textAlign:"center" }}>
+          <span style={{ fontSize:32, color:T.sepia, opacity:0.4 }}>✦</span>
+          <p style={{ fontFamily:serif, fontSize:15, fontStyle:"italic", color:T.sepia, marginTop:12, lineHeight:1.7 }}>
+            "Seu primeiro certificado aguarda ao final do caminho.<br/>Continue sua jornada."
+          </p>
+        </Parchment>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {earned.map(c => (
+            <Parchment key={c.id} onClick={()=>setViewing(c)} style={{ cursor:"pointer" }}>
+              <div style={{ padding:"20px 24px" }}>
+                {/* Mini certificate preview */}
+                <div style={{ border:`1px solid ${T.goldBorder}`, padding:"16px 20px", position:"relative" }}>
+                  <div style={{ position:"absolute", top:6, left:6 }}><CornerOrnament size={14} color={T.gold} /></div>
+                  <div style={{ position:"absolute", top:6, right:6, transform:"rotate(90deg)" }}><CornerOrnament size={14} color={T.gold} /></div>
+                  <div style={{ textAlign:"center", marginBottom:10 }}>
+                    <p style={{ fontFamily:display, fontSize:10, color:T.gold, letterSpacing:"0.2em", marginBottom:4 }}>AXIS CORE™ · ACADEMIA</p>
+                    <p style={{ fontFamily:serif, fontSize:11, fontStyle:"italic", color:T.sepia }}>Certificado de Conclusão</p>
+                  </div>
+                  <OrnamentDivider color={T.gold} />
+                  <div style={{ textAlign:"center", margin:"10px 0" }}>
+                    <p style={{ fontFamily:serif, fontSize:11, fontStyle:"italic", color:T.sepia, marginBottom:4 }}>Certificamos que</p>
+                    <p style={{ fontFamily:display, fontSize:15, color:T.ink, marginBottom:4 }}>{STUDENT.name}</p>
+                    <p style={{ fontFamily:serif, fontSize:11, fontStyle:"italic", color:T.sepia, marginBottom:2 }}>concluiu com aproveitamento</p>
+                    <p style={{ fontFamily:display, fontSize:12, color:T.gold }}>{c.title}</p>
+                  </div>
+                  <OrnamentDivider color={T.sepia} />
+                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:10 }}>
+                    <div style={{ textAlign:"center" }}>
+                      <div style={{ borderTop:`1px solid ${T.sepia}44`, paddingTop:4, width:80 }}>
+                        <p style={{ fontFamily:mono, fontSize:8, color:T.sepia }}>INSTRUTOR/A</p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"center" }}>
+                      <div style={{ width:28, height:28, borderRadius:"50%", background:T.goldFaint, border:`1px solid ${T.goldBorder}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 4px" }}>
+                        <span style={{ fontFamily:display, fontSize:12, color:T.gold }}>A</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"center" }}>
+                      <div style={{ borderTop:`1px solid ${T.sepia}44`, paddingTop:4, width:80 }}>
+                        <p style={{ fontFamily:mono, fontSize:8, color:T.sepia }}>ALUNO/A</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details below */}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
+                  <div>
+                    <p style={{ fontFamily:mono, fontSize:9, color:T.sepia, marginBottom:2 }}>
+                      EMITIDO EM {new Date(c.certificate_date||Date.now()).toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"}).toUpperCase()}
+                    </p>
+                    <p style={{ fontFamily:mono, fontSize:9, color:T.sepia }}>
+                      ID: AXIS-{c.id.toUpperCase()}-{STUDENT.name.replace(/\s/g,"").toUpperCase().slice(0,4)}-2025
+                    </p>
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={e=>{e.stopPropagation();}} style={{ fontFamily:mono, fontSize:9, padding:"6px 12px", background:T.goldFaint, border:`1px solid ${T.goldBorder}`, color:T.gold, borderRadius:3, cursor:"pointer", letterSpacing:"0.08em" }}>
+                      ⬇ PDF
+                    </button>
+                    <button onClick={e=>{e.stopPropagation();}} style={{ fontFamily:mono, fontSize:9, padding:"6px 12px", background:T.sepiaFaint, border:`1px solid ${T.border}`, color:T.sepia, borderRadius:3, cursor:"pointer", letterSpacing:"0.08em" }}>
+                      ↗ COMPARTILHAR
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Parchment>
+          ))}
+        </div>
+      )}
+
+      {/* Locked certificates */}
+      <div style={{ marginTop:24 }}>
+        <p style={{ fontFamily:display, fontSize:13, color:T.sepia, letterSpacing:"0.1em", marginBottom:14 }}>PRÓXIMOS CERTIFICADOS</p>
+        <OrnamentDivider color={T.sepia} />
+        {COURSES.filter(c=>!c.certified&&!c.locked).map(c => (
+          <div key={c.id} style={{ display:"flex", gap:12, alignItems:"center", padding:"12px 0", borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ width:32, height:32, borderRadius:3, background:T.sepiaFaint, border:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, color:T.sepia, flexShrink:0 }}>
+              {c.badge}
+            </div>
+            <div style={{ flex:1 }}>
+              <p style={{ fontFamily:body, fontSize:13, color:T.inkLight, marginBottom:2 }}>{c.title}</p>
+              <div style={{ height:2, background:T.sepiaFaint }}>
+                <div style={{ height:"100%", width:`${c.progress}%`, background:T.sepia }} />
+              </div>
+            </div>
+            <span style={{ fontFamily:mono, fontSize:10, color:T.sepia }}>{c.progress}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function AxisCoreStudent() {
+  const [tab, setTab] = useState("library");
+  const [selectedCourse, setSelectedCourse] = useState(null);
+
+  function handleSelectCourse(course) {
+    setSelectedCourse(course);
+    setTab("my_courses");
+  }
+
+  function renderMain() {
+    if (selectedCourse && tab === "my_courses") {
+      return <CourseDetail course={selectedCourse} onBack={()=>setSelectedCourse(null)} />;
+    }
+    switch(tab) {
+      case "library":    return <Library onSelectCourse={handleSelectCourse} />;
+      case "my_courses": return <MyCourses onSelectCourse={c=>{setSelectedCourse(c);}} />;
+      case "progress":   return <Progress />;
+      case "certs":      return <Certificates />;
+      default:           return null;
+    }
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", fontFamily:body }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&display=swap');
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:${T.ink}; }
+        ::-webkit-scrollbar { width:5px; }
+        ::-webkit-scrollbar-track { background:${T.warm}; }
+        ::-webkit-scrollbar-thumb { background:${T.sepia}66; border-radius:0; }
+        button { outline:none; }
+        @keyframes shimmer { 0%,100%{opacity:0.6}50%{opacity:1} }
+      `}</style>
+
+      <Sidebar active={tab} onChange={t=>{setTab(t);if(t!=="my_courses")setSelectedCourse(null);}} student={STUDENT} />
+      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        {renderMain()}
+      </div>
+    </div>
+  );
+}
