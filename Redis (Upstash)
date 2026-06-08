@@ -1,0 +1,3 @@
+Acesse [upstash.com](https://upstash.com)
+Create Database → Global → Free tier
+Copie `UPSTASH_REDIS_REST_URL` como `REDIS_URL`
