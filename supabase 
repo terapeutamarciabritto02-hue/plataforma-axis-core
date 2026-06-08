@@ -1,0 +1,59 @@
+plataforma-axis-core/
+│
+├── public/
+│   ├── favicon.ico
+│   ├── logo-axis.svg
+│   └── manifest.json
+│
+├── src/
+│   ├── assets/
+│   │
+│   ├── components/
+│   │   ├── ui/
+│   │   ├── layout/
+│   │   ├── dashboard/
+│   │   └── common/
+│   │
+│   ├── pages/
+│   │   ├── Home.tsx
+│   │   ├── Login.tsx
+│   │   ├── Dashboard.tsx
+│   │   ├── Clients.tsx
+│   │   └── Reports.tsx
+│   │
+│   ├── hooks/
+│   │
+│   ├── services/
+│   │   ├── supabase.ts
+│   │   └── api.ts
+│   │
+│   ├── contexts/
+│   │
+│   ├── types/
+│   │
+│   ├── lib/
+│   │
+│   ├── styles/
+│   │
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── router.tsx
+│
+├── supabase/
+│   ├── migrations/
+│   ├── seed.sql
+│   └── schema.sql
+│
+├── .env
+├── .env.example
+├── .gitignore
+├── .prettierignore
+├── .prettierrc
+├── components.json
+├── eslint.config.js
+├── package.json
+├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+├── vite.config.ts
+└── README.md
