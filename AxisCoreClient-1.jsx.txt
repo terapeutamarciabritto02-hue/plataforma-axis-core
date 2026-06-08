@@ -1,0 +1,921 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+const C = {
+  bg:       "#07060f",
+  bg1:      "#0c0a1a",
+  bg2:      "#110f24",
+  bg3:      "#17143a",
+  border:   "rgba(180,160,255,0.08)",
+  border2:  "rgba(180,160,255,0.16)",
+  violet:   "#b49dff",
+  violetDim:"rgba(180,157,255,0.5)",
+  violetFaint:"rgba(180,157,255,0.1)",
+  gold:     "#5b8dee",
+  goldDim:  "rgba(91,141,238,0.5)",
+  rose:     "#f472b6",
+  teal:     "#2dd4bf",
+  text:     "rgba(230,220,255,0.85)",
+  textDim:  "rgba(230,220,255,0.45)",
+  textFaint:"rgba(230,220,255,0.2)",
+};
+
+// ─── CHAKRA DATA ──────────────────────────────────────────────────────────────
+const CHAKRAS = [
+  { id:"root",      name:"Raiz",      sanskrit:"Muladhara",  hz:396, color:"#ef4444", pos:{ cx:160, cy:280 }, element:"Terra",   affirmation:"Eu sou seguro e enraizado." },
+  { id:"sacral",    name:"Sacral",    sanskrit:"Svadhisthana",hz:417,color:"#f97316", pos:{ cx:160, cy:240 }, element:"Água",    affirmation:"Eu fluo com a vida." },
+  { id:"solar",     name:"Plexo Solar",sanskrit:"Manipura",  hz:528, color:"#eab308", pos:{ cx:160, cy:200 }, element:"Fogo",    affirmation:"Eu sou poderoso e confiante." },
+  { id:"heart",     name:"Cardíaco",  sanskrit:"Anahata",    hz:639, color:"#22c55e", pos:{ cx:160, cy:160 }, element:"Ar",      affirmation:"Eu amo e sou amado." },
+  { id:"throat",    name:"Laríngeo",  sanskrit:"Vishuddha",  hz:741, color:"#3b82f6", pos:{ cx:160, cy:120 }, element:"Éter",    affirmation:"Eu me expresso com clareza." },
+  { id:"third_eye", name:"Frontal",   sanskrit:"Ajna",       hz:852, color:"#8b5cf6", pos:{ cx:160, cy:82  }, element:"Luz",     affirmation:"Eu confio na minha intuição." },
+  { id:"crown",     name:"Coronário", sanskrit:"Sahasrara",  hz:963, color:"#ec4899", pos:{ cx:160, cy:46  }, element:"Pensamento",affirmation:"Eu sou uno com o universo." },
+];
+
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+const CLIENT = {
+  name: "Maria Silva",
+  therapist: "Marcia Britto RQH",
+  since: "Novembro 2024",
+  totalSessions: 12,
+  nextSession: "2025-05-31T14:00",
+  avatar: "M",
+};
+
+const SESSIONS_HISTORY = [
+  { id:"s-012", date:"2025-05-28", table:"Mesa Hado Quantum",    duration:62, coherence:84, therapist:"Marcia Britto", notes:"Sessão muito positiva. Energia fluindo bem.", status:"completed", chakras:{ root:78, sacral:65, solar:82, heart:90, throat:71, third_eye:68, crown:75 } },
+  { id:"s-011", date:"2025-05-14", table:"Mesa de Frequências",  duration:55, coherence:79, therapist:"Marcia Britto", notes:"Trabalho focado no campo cardíaco.", status:"completed", chakras:{ root:70, sacral:72, solar:75, heart:88, throat:66, third_eye:64, crown:70 } },
+  { id:"s-010", date:"2025-04-30", table:"Mesa de Chakras",      duration:68, coherence:88, therapist:"Marcia Britto", notes:"Excelente coerência. Campo bem equilibrado.", status:"completed", chakras:{ root:82, sacral:79, solar:84, heart:91, throat:80, third_eye:76, crown:83 } },
+  { id:"s-009", date:"2025-04-16", table:"Mesa Multidimensional",duration:45, coherence:71, therapist:"Marcia Britto", notes:"Primeiro contato com multidimensional.", status:"completed", chakras:{ root:65, sacral:60, solar:68, heart:74, throat:58, third_eye:55, crown:62 } },
+  { id:"s-008", date:"2025-04-02", table:"Máquina Radiônica",    duration:90, coherence:82, therapist:"Marcia Britto", notes:"Trabalho de linhagem e ancestralidade.", status:"completed", chakras:{ root:80, sacral:68, solar:72, heart:78, throat:65, third_eye:70, crown:74 } },
+];
+
+const REPORTS = [
+  { id:"r-012", session_date:"2025-05-28", table:"Mesa Hado Quantum",    status:"delivered", pdf:true,  pages:4 },
+  { id:"r-011", session_date:"2025-05-14", table:"Mesa de Frequências",  status:"delivered", pdf:true,  pages:3 },
+  { id:"r-010", session_date:"2025-04-30", table:"Mesa de Chakras",      status:"delivered", pdf:true,  pages:5 },
+  { id:"r-009", session_date:"2025-04-16", table:"Mesa Multidimensional",status:"signed",    pdf:false, pages:3 },
+];
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const serif = "'Cormorant Garamond', 'Palatino Linotype', serif";
+const mono  = "'DM Mono', 'Courier New', monospace";
+const sans  = "'Outfit', system-ui, sans-serif";
+
+function cn(...a) { return a.filter(Boolean).join(" "); }
+
+// ─── ATOMS ────────────────────────────────────────────────────────────────────
+function Glass({ children, style={}, onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      background:"rgba(17,15,36,0.7)",
+      border:`1px solid ${C.border}`,
+      backdropFilter:"blur(12px)",
+      borderRadius:16,
+      ...style,
+      cursor: onClick ? "pointer" : "default",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ children, sub }) {
+  return (
+    <div style={{ marginBottom:20 }}>
+      <h2 style={{ fontFamily:serif, fontSize:26, fontWeight:300, color:C.text, letterSpacing:"-0.01em", lineHeight:1.1 }}>{children}</h2>
+      {sub && <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint, marginTop:4, letterSpacing:"0.08em" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function Chip({ children, color=C.violet }) {
+  return (
+    <span style={{
+      fontFamily:mono, fontSize:10, letterSpacing:"0.1em",
+      padding:"3px 10px", borderRadius:99,
+      background:`${color}15`, border:`1px solid ${color}33`,
+      color, display:"inline-block",
+    }}>
+      {children}
+    </span>
+  );
+}
+
+function ProgressRing({ value, size=60, stroke=4, color="#8b5cf6", label="" }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (value / 100) * circ;
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+      <svg width={size} height={size} style={{ transform:"rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          style={{ transition:"stroke-dasharray 1s ease" }} />
+      </svg>
+      <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint, letterSpacing:"0.06em" }}>{label}</span>
+    </div>
+  );
+}
+
+function CoherenceArc({ value, color }) {
+  const angle = (value / 100) * 180 - 90;
+  const rad = (angle * Math.PI) / 180;
+  const x = 60 + 50 * Math.cos(rad);
+  const y = 60 + 50 * Math.sin(rad);
+  const largeArc = value > 50 ? 1 : 0;
+  const endAngle = ((value / 100) * 180 - 90) * Math.PI / 180;
+  const endX = 60 + 50 * Math.cos(endAngle);
+  const endY = 60 + 50 * Math.sin(endAngle);
+  return (
+    <svg width={120} height={70} viewBox="0 0 120 70">
+      <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} strokeLinecap="round" />
+      <path d={`M 10 60 A 50 50 0 ${largeArc} 1 ${endX} ${endY}`} fill="none" stroke={color} strokeWidth={6} strokeLinecap="round" style={{ transition:"all 1s ease" }} />
+      <text x={60} y={52} textAnchor="middle" fontFamily={mono} fontSize={18} fill={color} fontWeight="700">{value}</text>
+      <text x={60} y={64} textAnchor="middle" fontFamily={mono} fontSize={9} fill={C.textFaint}>%</text>
+    </svg>
+  );
+}
+
+// ─── CHAKRA MANDALA ───────────────────────────────────────────────────────────
+function ChakraMandala({ levels = {}, size = 320, interactive = false }) {
+  const [hovered, setHovered] = useState(null);
+  const defaultLevels = { root:75, sacral:68, solar:80, heart:88, throat:72, third_eye:70, crown:76 };
+  const lvls = { ...defaultLevels, ...levels };
+
+  return (
+    <div style={{ position:"relative", width:size, height:size }}>
+      <svg width={size} height={size} viewBox="0 0 320 320">
+        {/* Background rings */}
+        {[40,70,100,130].map(r => (
+          <circle key={r} cx={160} cy={160} r={r} fill="none" stroke="rgba(180,157,255,0.06)" strokeWidth={1} strokeDasharray="3 6" />
+        ))}
+        {/* Cross lines */}
+        <line x1={160} y1={30} x2={160} y2={290} stroke="rgba(180,157,255,0.04)" />
+        <line x1={30}  y1={160} x2={290} y2={160} stroke="rgba(180,157,255,0.04)" />
+
+        {/* Body silhouette hint */}
+        <ellipse cx={160} cy={160} rx={18} ry={120} fill="rgba(180,157,255,0.03)" stroke="rgba(180,157,255,0.06)" strokeWidth={1} />
+
+        {/* Chakra nodes */}
+        {CHAKRAS.map(ch => {
+          const level = lvls[ch.id] ?? 70;
+          const isHov = hovered === ch.id;
+          const baseR = 10 + (level / 100) * 8;
+          const glowR = baseR + 8;
+          return (
+            <g key={ch.id}
+              onMouseEnter={() => interactive && setHovered(ch.id)}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: interactive ? "pointer" : "default" }}>
+              {/* Outer glow */}
+              <circle cx={ch.pos.cx} cy={ch.pos.cy} r={glowR}
+                fill={`${ch.color}${isHov?"22":"10"}`}
+                style={{ transition:"all 0.4s", filter:`blur(${isHov?4:2}px)` }} />
+              {/* Main node */}
+              <circle cx={ch.pos.cx} cy={ch.pos.cy} r={baseR}
+                fill={`${ch.color}${isHov?"55":"33"}`}
+                stroke={ch.color}
+                strokeWidth={isHov ? 1.5 : 1}
+                style={{ transition:"all 0.4s" }} />
+              {/* Inner dot */}
+              <circle cx={ch.pos.cx} cy={ch.pos.cy} r={3} fill={ch.color}
+                style={{ animation:`pulse_${ch.id} 2s ease-in-out infinite` }} />
+              {/* Level arc */}
+              {(() => {
+                const r2 = baseR + 14;
+                const c2 = 2 * Math.PI * r2;
+                const d2 = (level / 100) * c2;
+                return (
+                  <circle cx={ch.pos.cx} cy={ch.pos.cy} r={r2}
+                    fill="none" stroke={`${ch.color}44`} strokeWidth={1.5}
+                    strokeDasharray={`${d2} ${c2}`}
+                    transform={`rotate(-90 ${ch.pos.cx} ${ch.pos.cy})`}
+                    style={{ transition:"stroke-dasharray 1s ease" }} />
+                );
+              })()}
+            </g>
+          );
+        })}
+
+        {/* Hover tooltip */}
+        {hovered && (() => {
+          const ch = CHAKRAS.find(c => c.id === hovered);
+          const level = lvls[hovered] ?? 70;
+          const tx = ch.pos.cx > 160 ? ch.pos.cx - 90 : ch.pos.cx + 30;
+          return (
+            <g>
+              <rect x={tx} y={ch.pos.cy - 22} width={88} height={44} rx={6}
+                fill="rgba(17,15,36,0.95)" stroke={`${ch.color}44`} strokeWidth={1} />
+              <text x={tx+44} y={ch.pos.cy-6} textAnchor="middle" fontFamily={mono} fontSize={11} fill={ch.color}>{ch.name}</text>
+              <text x={tx+44} y={ch.pos.cy+8} textAnchor="middle" fontFamily={mono} fontSize={11} fill="rgba(230,220,255,0.8)">{level}% · {ch.hz}Hz</text>
+            </g>
+          );
+        })()}
+      </svg>
+    </div>
+  );
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
+const TABS = [
+  { id:"home",      icon:"✦", label:"Início"     },
+  { id:"chakras",   icon:"◎", label:"Campo"      },
+  { id:"history",   icon:"◈", label:"Histórico"  },
+  { id:"schedule",  icon:"◇", label:"Agendar"    },
+  { id:"reports",   icon:"▦", label:"Relatórios" },
+];
+
+function BottomNav({ active, onChange }) {
+  return (
+    <div style={{
+      position:"fixed", bottom:0, left:0, right:0, zIndex:100,
+      background:"rgba(7,6,15,0.92)",
+      backdropFilter:"blur(24px)",
+      borderTop:`1px solid ${C.border}`,
+      display:"flex", justifyContent:"space-around",
+      padding:"10px 0 16px",
+    }}>
+      {TABS.map(t => (
+        <button key={t.id} onClick={()=>onChange(t.id)} style={{
+          display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+          background:"none", border:"none", cursor:"pointer",
+          padding:"4px 16px", borderRadius:12, transition:"all 0.2s",
+        }}>
+          <span style={{ fontSize:18, color: active===t.id ? C.violet : C.textFaint, transition:"all 0.2s" }}>
+            {t.icon}
+          </span>
+          <span style={{ fontFamily:mono, fontSize:9, letterSpacing:"0.08em",
+            color: active===t.id ? C.violet : C.textFaint, transition:"all 0.2s" }}>
+            {t.label.toUpperCase()}
+          </span>
+          {active===t.id && (
+            <div style={{ width:4, height:4, borderRadius:"50%", background:C.violet, boxShadow:`0 0 8px ${C.violet}` }} />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── HOME ─────────────────────────────────────────────────────────────────────
+function Home({ client, sessions }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setTimeout(()=>setMounted(true), 100); }, []);
+
+  const lastSession = sessions[0];
+  const nextDate = new Date(client.nextSession);
+  const daysUntil = Math.ceil((nextDate - Date.now()) / 86400000);
+
+  const avgCoherence = Math.round(sessions.reduce((a,s)=>a+s.coherence,0)/sessions.length);
+
+  return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:20 }}>
+      {/* Header */}
+      <div style={{ opacity: mounted?1:0, transform: mounted?"none":"translateY(12px)", transition:"all 0.6s ease" }}>
+        <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint, letterSpacing:"0.12em", marginBottom:6 }}>
+          BOM DIA ✦
+        </p>
+        <h1 style={{ fontFamily:serif, fontSize:32, fontWeight:300, color:C.text, lineHeight:1.1 }}>
+          {client.name.split(" ")[0]},<br/>
+          <em style={{ color:C.violet }}>como você está?</em>
+        </h1>
+        <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint, marginTop:8 }}>
+          Com {client.therapist} desde {client.since}
+        </p>
+      </div>
+
+      {/* Next session card */}
+      <Glass style={{ padding:20, background:"linear-gradient(135deg, rgba(180,157,255,0.12), rgba(17,15,36,0.8))", border:`1px solid ${C.border2}`, opacity:mounted?1:0, transition:"all 0.6s 0.1s ease" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div>
+            <p style={{ fontFamily:mono, fontSize:10, color:C.violetDim, letterSpacing:"0.12em", marginBottom:8 }}>PRÓXIMA SESSÃO</p>
+            <p style={{ fontFamily:serif, fontSize:22, color:C.text }}>
+              {nextDate.toLocaleDateString("pt-BR", { weekday:"long", day:"numeric", month:"long" })}
+            </p>
+            <p style={{ fontFamily:mono, fontSize:13, color:C.violet, marginTop:4 }}>
+              {nextDate.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })} · Marcia Britto
+            </p>
+          </div>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontFamily:serif, fontSize:36, color:C.gold, lineHeight:1 }}>{daysUntil}</div>
+            <div style={{ fontFamily:mono, fontSize:9, color:C.goldDim, letterSpacing:"0.1em" }}>DIAS</div>
+          </div>
+        </div>
+      </Glass>
+
+      {/* Stats row */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, opacity:mounted?1:0, transition:"all 0.6s 0.2s ease" }}>
+        {[
+          { label:"Sessões",      value:client.totalSessions, unit:"total",    color:C.violet },
+          { label:"Coerência",    value:`${avgCoherence}%`,   unit:"média",    color:C.teal   },
+          { label:"Frequência",   value:"528",                unit:"Hz · base",color:C.gold   },
+        ].map(s => (
+          <Glass key={s.label} style={{ padding:"14px 12px", textAlign:"center" }}>
+            <div style={{ fontFamily:serif, fontSize:26, color:s.color, lineHeight:1, marginBottom:4 }}>{s.value}</div>
+            <div style={{ fontFamily:mono, fontSize:9, color:C.textFaint, letterSpacing:"0.08em" }}>
+              {s.label.toUpperCase()}
+            </div>
+            <div style={{ fontFamily:mono, fontSize:9, color:C.textFaint }}>{s.unit}</div>
+          </Glass>
+        ))}
+      </div>
+
+      {/* Last session preview */}
+      {lastSession && (
+        <Glass style={{ padding:18, opacity:mounted?1:0, transition:"all 0.6s 0.3s ease" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em" }}>ÚLTIMA SESSÃO</p>
+            <Chip color={C.teal}>{lastSession.coherence}% coerência</Chip>
+          </div>
+          <div style={{ display:"flex", gap:16, alignItems:"center" }}>
+            <ChakraMandala levels={lastSession.chakras} size={100} />
+            <div style={{ flex:1 }}>
+              <p style={{ fontFamily:serif, fontSize:16, color:C.text, marginBottom:4 }}>{lastSession.table}</p>
+              <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint, marginBottom:8 }}>
+                {new Date(lastSession.date).toLocaleDateString("pt-BR", { day:"numeric", month:"long" })} · {lastSession.duration}min
+              </p>
+              <p style={{ fontFamily:serif, fontSize:13, color:C.textDim, fontStyle:"italic", lineHeight:1.5 }}>
+                "{lastSession.notes}"
+              </p>
+            </div>
+          </div>
+        </Glass>
+      )}
+
+      {/* Affirmation of the day */}
+      <Glass style={{ padding:20, textAlign:"center", background:"rgba(139,92,246,0.06)", opacity:mounted?1:0, transition:"all 0.6s 0.4s ease" }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:C.violetDim, letterSpacing:"0.12em", marginBottom:10 }}>AFIRMAÇÃO DO DIA · CHAKRA CARDÍACO</p>
+        <p style={{ fontFamily:serif, fontSize:20, fontStyle:"italic", color:C.text, lineHeight:1.6 }}>
+          "{CHAKRAS.find(c=>c.id==="heart")?.affirmation}"
+        </p>
+        <div style={{ marginTop:10, width:8, height:8, borderRadius:"50%", background:"#22c55e", margin:"10px auto 0", boxShadow:"0 0 12px #22c55e" }} />
+      </Glass>
+    </div>
+  );
+}
+
+// ─── CHAKRA VIEW ──────────────────────────────────────────────────────────────
+function ChakraView({ sessions }) {
+  const [selected, setSelected] = useState(null);
+  const latest = sessions[0];
+  const levels = latest?.chakras || {};
+
+  const selectedChakra = CHAKRAS.find(c => c.id === selected);
+
+  // Evolution: compare last 2 sessions
+  const prev = sessions[1]?.chakras || {};
+  const deltas = {};
+  CHAKRAS.forEach(c => { deltas[c.id] = (levels[c.id]||0) - (prev[c.id]||0); });
+
+  return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:20 }}>
+      <SectionTitle sub={`SESSÃO ${latest?.date || "—"} · ${latest?.table || "—"}`}>
+        Campo Energético
+      </SectionTitle>
+
+      {/* Main mandala */}
+      <Glass style={{ padding:20, display:"flex", flexDirection:"column", alignItems:"center" }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:16 }}>
+          TOQUE UM CHAKRA PARA DETALHES
+        </p>
+        <ChakraMandala levels={levels} size={300} interactive={true} />
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12 }}>
+          <CoherenceArc value={latest?.coherence||80} color={C.violet} />
+          <div>
+            <p style={{ fontFamily:serif, fontSize:22, color:C.text }}>{latest?.coherence||80}% coerência</p>
+            <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint }}>Índice de harmonização do campo</p>
+          </div>
+        </div>
+      </Glass>
+
+      {/* Chakra bars */}
+      <Glass style={{ padding:18 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:14 }}>
+          NÍVEIS INDIVIDUAIS
+        </p>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {CHAKRAS.map(ch => {
+            const level = levels[ch.id] || 70;
+            const delta = deltas[ch.id] || 0;
+            return (
+              <button key={ch.id} onClick={()=>setSelected(selected===ch.id?null:ch.id)}
+                style={{ background:"none", border:"none", cursor:"pointer", textAlign:"left", padding:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                  <div style={{ width:8, height:8, borderRadius:"50%", background:ch.color, boxShadow:`0 0 6px ${ch.color}`, flexShrink:0 }} />
+                  <span style={{ fontFamily:mono, fontSize:11, color:C.textDim, flex:1 }}>{ch.name}</span>
+                  <span style={{ fontFamily:mono, fontSize:11, color:ch.color }}>{level}%</span>
+                  {delta !== 0 && (
+                    <span style={{ fontFamily:mono, fontSize:10, color: delta>0?"#4ade80":"#f87171" }}>
+                      {delta>0?"+":""}{delta}
+                    </span>
+                  )}
+                </div>
+                <div style={{ height:3, background:"rgba(255,255,255,0.05)", borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${level}%`, background:`linear-gradient(to right, ${ch.color}88, ${ch.color})`, borderRadius:99, transition:"width 1s ease" }} />
+                </div>
+                {/* Expanded detail */}
+                {selected === ch.id && (
+                  <div style={{ marginTop:10, padding:"12px 14px", background:C.bg3, borderRadius:10, border:`1px solid ${ch.color}22` }}>
+                    <div style={{ display:"flex", gap:12, marginBottom:8 }}>
+                      <Chip color={ch.color}>{ch.hz} Hz</Chip>
+                      <Chip color={ch.color}>{ch.element}</Chip>
+                      <Chip color={ch.color}>{ch.sanskrit}</Chip>
+                    </div>
+                    <p style={{ fontFamily:serif, fontSize:14, fontStyle:"italic", color:C.textDim, lineHeight:1.6 }}>
+                      "{ch.affirmation}"
+                    </p>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </Glass>
+
+      {/* Session comparison */}
+      <Glass style={{ padding:18 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:14 }}>
+          EVOLUÇÃO · ÚLTIMAS 2 SESSÕES
+        </p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6 }}>
+          {CHAKRAS.map(ch => (
+            <div key={ch.id} style={{ textAlign:"center" }}>
+              <ProgressRing value={levels[ch.id]||70} size={44} stroke={3} color={ch.color} label={ch.name.slice(0,3).toUpperCase()} />
+            </div>
+          ))}
+        </div>
+      </Glass>
+    </div>
+  );
+}
+
+// ─── HISTORY ──────────────────────────────────────────────────────────────────
+function History({ sessions }) {
+  const [expanded, setExpanded] = useState(null);
+
+  const TABLE_COLORS = {
+    "Mesa Hado Quantum":"#6366f1",
+    "Mesa de Frequências":"#ec4899",
+    "Mesa de Chakras":"#10b981",
+    "Mesa Multidimensional":"#06b6d4",
+    "Máquina Radiônica":"#5b8dee",
+  };
+
+  return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:16 }}>
+      <SectionTitle sub={`${sessions.length} SESSÕES REGISTRADAS`}>
+        Histórico
+      </SectionTitle>
+
+      {/* Coherence trend */}
+      <Glass style={{ padding:16 }}>
+        <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:12 }}>
+          EVOLUÇÃO DA COERÊNCIA
+        </p>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:60 }}>
+          {[...sessions].reverse().map((s,i) => {
+            const max = Math.max(...sessions.map(x=>x.coherence));
+            const h = (s.coherence/max)*100;
+            return (
+              <div key={s.id} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+                <span style={{ fontFamily:mono, fontSize:8, color:C.textFaint }}>{s.coherence}%</span>
+                <div style={{
+                  width:"100%", height:`${h}%`, minHeight:4, borderRadius:"3px 3px 0 0",
+                  background:`linear-gradient(to top, ${C.violet}66, ${C.violet}22)`,
+                  border:`1px solid ${C.violet}33`,
+                }} />
+                <span style={{ fontFamily:mono, fontSize:8, color:C.textFaint }}>
+                  {new Date(s.date).toLocaleDateString("pt-BR",{day:"numeric",month:"short"})}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Glass>
+
+      {/* Sessions list */}
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {sessions.map((s,i) => {
+          const tableColor = TABLE_COLORS[s.table] || C.violet;
+          const isOpen = expanded === s.id;
+          return (
+            <Glass key={s.id} style={{ overflow:"hidden", border: isOpen ? `1px solid ${tableColor}33` : `1px solid ${C.border}` }}>
+              {/* Header */}
+              <button onClick={()=>setExpanded(isOpen?null:s.id)} style={{
+                width:"100%", padding:"14px 16px", background:"none", border:"none", cursor:"pointer",
+                display:"flex", alignItems:"center", justifyContent:"space-between", textAlign:"left",
+              }}>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{ width:36, height:36, borderRadius:10, background:`${tableColor}18`, border:`1px solid ${tableColor}33`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <span style={{ fontSize:16, color:tableColor }}>◈</span>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily:serif, fontSize:15, color:C.text, marginBottom:2 }}>{s.table}</p>
+                    <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint }}>
+                      {new Date(s.date).toLocaleDateString("pt-BR",{weekday:"short",day:"numeric",month:"long",year:"numeric"})} · {s.duration}min
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <Chip color={s.coherence>=85?C.teal:s.coherence>=70?C.violet:C.gold}>{s.coherence}%</Chip>
+                  <span style={{ color:C.textFaint, fontSize:12, transform:isOpen?"rotate(180deg)":"none", transition:"transform 0.3s" }}>▾</span>
+                </div>
+              </button>
+
+              {/* Expanded */}
+              {isOpen && (
+                <div style={{ padding:"0 16px 16px", borderTop:`1px solid ${C.border}` }}>
+                  <div style={{ display:"flex", gap:16, paddingTop:14, alignItems:"flex-start" }}>
+                    <ChakraMandala levels={s.chakras} size={120} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+                        <Chip color={tableColor}>{s.duration}min</Chip>
+                        <Chip color={C.violet}>Coerência {s.coherence}%</Chip>
+                      </div>
+                      <p style={{ fontFamily:serif, fontSize:14, fontStyle:"italic", color:C.textDim, lineHeight:1.7, marginBottom:10 }}>
+                        "{s.notes}"
+                      </p>
+                      {/* Chakra mini-bars */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                        {CHAKRAS.slice(0,4).map(ch => (
+                          <div key={ch.id} style={{ display:"flex", gap:6, alignItems:"center" }}>
+                            <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint, width:50, flexShrink:0 }}>{ch.name}</span>
+                            <div style={{ flex:1, height:2, background:"rgba(255,255,255,0.05)", borderRadius:99 }}>
+                              <div style={{ height:"100%", width:`${s.chakras[ch.id]||70}%`, background:ch.color, borderRadius:99 }} />
+                            </div>
+                            <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint, width:24 }}>{s.chakras[ch.id]||70}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Glass>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── SCHEDULE ─────────────────────────────────────────────────────────────────
+function Schedule({ client }) {
+  const [step, setStep] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedType, setSelectedType] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const today = new Date();
+  const DAYS = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    if (d.getDay() !== 0) DAYS.push(d);
+  }
+
+  const TIMES = ["09:00","10:00","11:00","14:00","15:00","16:00","17:00"];
+  const UNAVAILABLE_TIMES = ["10:00","14:00"];
+
+  const TYPES = [
+    { id:"hado",   name:"Mesa Hado Quantum",   desc:"Frequência e equilíbrio energético",    color:"#6366f1", duration:"60min" },
+    { id:"chakras",name:"Mesa de Chakras",      desc:"Balanceamento dos centros energéticos", color:"#10b981", duration:"75min" },
+    { id:"freq",   name:"Mesa de Frequências",  desc:"Frequências terapêuticas específicas",  color:"#ec4899", duration:"55min" },
+    { id:"multi",  name:"Mesa Multidimensional",desc:"Trabalho em múltiplos campos",          color:"#06b6d4", duration:"90min" },
+  ];
+
+  if (submitted) return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:20, alignItems:"center", justifyContent:"center", minHeight:"60vh" }}>
+      <div style={{ width:80, height:80, borderRadius:"50%", background:"rgba(34,197,94,0.15)", border:"1px solid rgba(34,197,94,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 }}>✓</div>
+      <div style={{ textAlign:"center" }}>
+        <h2 style={{ fontFamily:serif, fontSize:28, color:C.text, marginBottom:8 }}>Solicitação Enviada</h2>
+        <p style={{ fontFamily:mono, fontSize:12, color:C.textFaint, lineHeight:1.7 }}>
+          {selectedDate?.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}<br/>
+          às {selectedTime} · {TYPES.find(t=>t.id===selectedType)?.name}<br/>
+          Aguarde confirmação de {client.therapist}
+        </p>
+      </div>
+      <button onClick={()=>{setSubmitted(false);setStep(1);setSelectedDate(null);setSelectedTime(null);setSelectedType(null);setNotes("");}}
+        style={{ fontFamily:mono, fontSize:12, color:C.violet, background:`${C.violet}15`, border:`1px solid ${C.violet}33`, padding:"10px 24px", borderRadius:99, cursor:"pointer" }}>
+        Nova Solicitação
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:20 }}>
+      <SectionTitle sub={`COM ${client.therapist.toUpperCase()}`}>
+        Agendar Sessão
+      </SectionTitle>
+
+      {/* Progress steps */}
+      <div style={{ display:"flex", alignItems:"center", gap:0 }}>
+        {["Data","Horário","Mesa","Confirmar"].map((s,i) => (
+          <div key={s} style={{ display:"flex", alignItems:"center", flex:1 }}>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+              <div style={{
+                width:28, height:28, borderRadius:"50%",
+                background: step>i+1 ? C.violet : step===i+1 ? `${C.violet}33` : "rgba(255,255,255,0.04)",
+                border:`1px solid ${step>=i+1 ? C.violet : C.border}`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontFamily:mono, fontSize:11, color: step>i+1?"#fff":step===i+1?C.violet:C.textFaint,
+              }}>
+                {step>i+1 ? "✓" : i+1}
+              </div>
+              <span style={{ fontFamily:mono, fontSize:9, color: step===i+1?C.violet:C.textFaint, letterSpacing:"0.06em" }}>
+                {s.toUpperCase()}
+              </span>
+            </div>
+            {i<3 && <div style={{ flex:1, height:1, background: step>i+1?C.violet:C.border, marginBottom:14 }} />}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 1 — Date */}
+      {step===1 && (
+        <Glass style={{ padding:18 }}>
+          <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:14 }}>ESCOLHA UMA DATA</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+            {DAYS.slice(0,12).map(d => {
+              const isSelected = selectedDate?.toDateString()===d.toDateString();
+              const isWeekend = d.getDay()===6;
+              return (
+                <button key={d.toISOString()} onClick={()=>!isWeekend&&setSelectedDate(d)} disabled={isWeekend}
+                  style={{
+                    padding:"10px 6px", borderRadius:10, border:`1px solid ${isSelected?C.violet+"66":C.border}`,
+                    background: isSelected?`${C.violet}18`:isWeekend?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.02)",
+                    cursor:isWeekend?"not-allowed":"pointer", opacity:isWeekend?0.3:1, transition:"all 0.2s",
+                    textAlign:"center",
+                  }}>
+                  <div style={{ fontFamily:mono, fontSize:9, color:isSelected?C.violet:C.textFaint, marginBottom:2 }}>
+                    {d.toLocaleDateString("pt-BR",{weekday:"short"}).toUpperCase()}
+                  </div>
+                  <div style={{ fontFamily:serif, fontSize:20, color:isSelected?C.violet:C.text }}>
+                    {d.getDate()}
+                  </div>
+                  <div style={{ fontFamily:mono, fontSize:9, color:C.textFaint }}>
+                    {d.toLocaleDateString("pt-BR",{month:"short"})}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginTop:16 }}>
+            <button onClick={()=>selectedDate&&setStep(2)} disabled={!selectedDate}
+              style={{ width:"100%", padding:"12px", background:selectedDate?C.violetFaint:"rgba(255,255,255,0.03)", border:`1px solid ${selectedDate?C.violet+"44":C.border}`, color:selectedDate?C.violet:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:selectedDate?"pointer":"not-allowed", transition:"all 0.2s" }}>
+              Continuar →
+            </button>
+          </div>
+        </Glass>
+      )}
+
+      {/* Step 2 — Time */}
+      {step===2 && (
+        <Glass style={{ padding:18 }}>
+          <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:4 }}>ESCOLHA O HORÁRIO</p>
+          <p style={{ fontFamily:serif, fontSize:14, color:C.textDim, marginBottom:14 }}>
+            {selectedDate?.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}
+          </p>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            {TIMES.map(t => {
+              const unavail = UNAVAILABLE_TIMES.includes(t);
+              const isSel = selectedTime===t;
+              return (
+                <button key={t} onClick={()=>!unavail&&setSelectedTime(t)} disabled={unavail}
+                  style={{
+                    padding:"12px 0", borderRadius:10, border:`1px solid ${isSel?C.violet+"66":C.border}`,
+                    background:isSel?`${C.violet}18`:unavail?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.02)",
+                    cursor:unavail?"not-allowed":"pointer", opacity:unavail?0.3:1,
+                    fontFamily:serif, fontSize:16, color:isSel?C.violet:C.text, transition:"all 0.2s",
+                  }}>
+                  {t}
+                  {unavail && <div style={{ fontFamily:mono, fontSize:8, color:C.textFaint, marginTop:2 }}>OCUPADO</div>}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:16 }}>
+            <button onClick={()=>setStep(1)} style={{ padding:"11px 20px", background:"transparent", border:`1px solid ${C.border}`, color:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:"pointer" }}>← Voltar</button>
+            <button onClick={()=>selectedTime&&setStep(3)} disabled={!selectedTime}
+              style={{ flex:1, padding:"12px", background:selectedTime?C.violetFaint:"rgba(255,255,255,0.03)", border:`1px solid ${selectedTime?C.violet+"44":C.border}`, color:selectedTime?C.violet:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:selectedTime?"pointer":"not-allowed" }}>
+              Continuar →
+            </button>
+          </div>
+        </Glass>
+      )}
+
+      {/* Step 3 — Mesa type */}
+      {step===3 && (
+        <Glass style={{ padding:18 }}>
+          <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:14 }}>TIPO DE SESSÃO</p>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {TYPES.map(t => {
+              const isSel = selectedType===t.id;
+              return (
+                <button key={t.id} onClick={()=>setSelectedType(t.id)} style={{
+                  padding:"14px 16px", borderRadius:10, border:`1px solid ${isSel?t.color+"55":C.border}`,
+                  background:isSel?`${t.color}10`:"rgba(255,255,255,0.02)", cursor:"pointer", textAlign:"left", transition:"all 0.2s",
+                }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <p style={{ fontFamily:serif, fontSize:15, color:C.text, marginBottom:3 }}>{t.name}</p>
+                      <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint }}>{t.desc}</p>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <Chip color={t.color}>{t.duration}</Chip>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginTop:14 }}>
+            <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, marginBottom:6, letterSpacing:"0.08em" }}>OBSERVAÇÕES (OPCIONAL)</p>
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Compartilhe como está se sentindo..."
+              style={{ width:"100%", padding:"10px 12px", background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, color:C.text, fontFamily:serif, fontSize:14, borderRadius:10, outline:"none", resize:"vertical", minHeight:72 }} />
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+            <button onClick={()=>setStep(2)} style={{ padding:"11px 20px", background:"transparent", border:`1px solid ${C.border}`, color:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:"pointer" }}>← Voltar</button>
+            <button onClick={()=>selectedType&&setStep(4)} disabled={!selectedType}
+              style={{ flex:1, padding:"12px", background:selectedType?C.violetFaint:"rgba(255,255,255,0.03)", border:`1px solid ${selectedType?C.violet+"44":C.border}`, color:selectedType?C.violet:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:selectedType?"pointer":"not-allowed" }}>
+              Continuar →
+            </button>
+          </div>
+        </Glass>
+      )}
+
+      {/* Step 4 — Confirm */}
+      {step===4 && (
+        <Glass style={{ padding:20, border:`1px solid ${C.border2}` }}>
+          <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, letterSpacing:"0.1em", marginBottom:16 }}>CONFIRMAR SOLICITAÇÃO</p>
+          {[
+            ["Data",    selectedDate?.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})],
+            ["Horário", selectedTime],
+            ["Mesa",    TYPES.find(t=>t.id===selectedType)?.name],
+            ["Duração", TYPES.find(t=>t.id===selectedType)?.duration],
+            ["Terapeuta", client.therapist],
+            ...(notes ? [["Observações", notes]] : []),
+          ].map(([k,v]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+              <span style={{ fontFamily:mono, fontSize:11, color:C.textFaint, letterSpacing:"0.08em" }}>{k.toUpperCase()}</span>
+              <span style={{ fontFamily:serif, fontSize:14, color:C.text, maxWidth:"60%", textAlign:"right" }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ marginTop:6, padding:"10px 12px", background:"rgba(180,157,255,0.06)", borderRadius:8 }}>
+            <p style={{ fontFamily:mono, fontSize:10, color:C.violetDim, lineHeight:1.6 }}>
+              A solicitação será enviada para {client.therapist}, que confirmará a disponibilidade.
+            </p>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:14 }}>
+            <button onClick={()=>setStep(3)} style={{ padding:"11px 20px", background:"transparent", border:`1px solid ${C.border}`, color:C.textFaint, fontFamily:mono, fontSize:12, borderRadius:10, cursor:"pointer" }}>← Voltar</button>
+            <button onClick={()=>setSubmitted(true)} style={{ flex:1, padding:"13px", background:C.violetFaint, border:`1px solid ${C.violet}55`, color:C.violet, fontFamily:mono, fontSize:12, borderRadius:10, cursor:"pointer" }}>
+              ✓ Confirmar Solicitação
+            </button>
+          </div>
+        </Glass>
+      )}
+    </div>
+  );
+}
+
+// ─── REPORTS ─────────────────────────────────────────────────────────────────
+function ClientReports({ reports, sessions }) {
+  const [selected, setSelected] = useState(null);
+
+  const STATUS_MAP = {
+    delivered: { label:"Disponível", color:C.teal   },
+    signed:    { label:"Assinado",   color:C.violet  },
+    draft:     { label:"Em Preparo", color:C.gold    },
+  };
+
+  const selectedSession = sessions.find(s => selected && new Date(s.date).toLocaleDateString()===new Date(selected.session_date).toLocaleDateString());
+
+  return (
+    <div style={{ padding:"24px 20px 100px", display:"flex", flexDirection:"column", gap:16 }}>
+      <SectionTitle sub={`${reports.length} RELATÓRIOS DISPONÍVEIS`}>
+        Meus Relatórios
+      </SectionTitle>
+
+      {/* List */}
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {reports.map(r => {
+          const status = STATUS_MAP[r.status];
+          const isSel = selected?.id === r.id;
+          return (
+            <Glass key={r.id} onClick={()=>setSelected(isSel?null:r)}
+              style={{ padding:16, border: isSel?`1px solid ${C.violet}33`:undefined, cursor:"pointer" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                <div>
+                  <p style={{ fontFamily:serif, fontSize:16, color:C.text, marginBottom:4 }}>{r.table}</p>
+                  <p style={{ fontFamily:mono, fontSize:11, color:C.textFaint }}>
+                    {new Date(r.session_date).toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}
+                  </p>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
+                  <Chip color={status.color}>{status.label}</Chip>
+                  {r.pdf && <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint }}>{r.pages}p · PDF</span>}
+                </div>
+              </div>
+
+              {isSel && selectedSession && (
+                <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${C.border}` }}>
+                  {/* Chakra snapshot */}
+                  <div style={{ display:"flex", gap:16, marginBottom:14 }}>
+                    <ChakraMandala levels={selectedSession.chakras} size={100} />
+                    <div style={{ flex:1 }}>
+                      <p style={{ fontFamily:mono, fontSize:10, color:C.textFaint, marginBottom:6, letterSpacing:"0.08em" }}>RESUMO DA SESSÃO</p>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                        <Chip color={C.teal}>{selectedSession.coherence}% coerência</Chip>
+                        <Chip color={C.violet}>{selectedSession.duration}min</Chip>
+                      </div>
+                      <p style={{ fontFamily:serif, fontSize:13, fontStyle:"italic", color:C.textDim, lineHeight:1.6 }}>
+                        "{selectedSession.notes}"
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Chakra bars */}
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {CHAKRAS.map(ch => (
+                      <div key={ch.id} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                        <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint, width:52 }}>{ch.name}</span>
+                        <div style={{ flex:1, height:2, background:"rgba(255,255,255,0.05)", borderRadius:99 }}>
+                          <div style={{ height:"100%", width:`${selectedSession.chakras[ch.id]||70}%`, background:ch.color, borderRadius:99 }} />
+                        </div>
+                        <span style={{ fontFamily:mono, fontSize:9, color:C.textFaint, width:24 }}>{selectedSession.chakras[ch.id]||70}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display:"flex", gap:8, marginTop:14 }}>
+                    {r.pdf && (
+                      <button style={{ flex:1, padding:"10px", background:C.violetFaint, border:`1px solid ${C.violet}33`, color:C.violet, fontFamily:mono, fontSize:11, borderRadius:8, cursor:"pointer" }}>
+                        ⬇ Baixar PDF
+                      </button>
+                    )}
+                    <button style={{ flex:1, padding:"10px", background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, color:C.textDim, fontFamily:mono, fontSize:11, borderRadius:8, cursor:"pointer" }}>
+                      ↗ Compartilhar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Glass>
+          );
+        })}
+      </div>
+
+      {/* Disclaimer */}
+      <Glass style={{ padding:16 }}>
+        <p style={{ fontFamily:serif, fontSize:13, fontStyle:"italic", color:C.textFaint, lineHeight:1.8, textAlign:"center" }}>
+          "Ferramenta complementar de desenvolvimento pessoal e terapêutico. Os relatórios não substituem acompanhamento médico, psicológico ou profissional de saúde licenciado."
+        </p>
+      </Glass>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function AxisCoreClient() {
+  const [tab, setTab] = useState("home");
+
+  function renderTab() {
+    switch(tab) {
+      case "home":     return <Home client={CLIENT} sessions={SESSIONS_HISTORY} />;
+      case "chakras":  return <ChakraView sessions={SESSIONS_HISTORY} />;
+      case "history":  return <History sessions={SESSIONS_HISTORY} />;
+      case "schedule": return <Schedule client={CLIENT} />;
+      case "reports":  return <ClientReports reports={REPORTS} sessions={SESSIONS_HISTORY} />;
+      default:         return null;
+    }
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", maxWidth:480, margin:"0 auto", background:C.bg, color:C.text, position:"relative" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&family=Outfit:wght@300;400;600&display=swap');
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:${C.bg}; }
+        ::-webkit-scrollbar { width:2px; }
+        ::-webkit-scrollbar-thumb { background:${C.border2}; }
+        button { outline:none; }
+        textarea, input { outline:none; background:transparent; }
+        @keyframes glow { 0%,100%{opacity:1}50%{opacity:0.4} }
+      `}</style>
+
+      {/* Ambient background */}
+      <div style={{ position:"fixed", top:"-10%", left:"50%", transform:"translateX(-50%)", width:400, height:400, borderRadius:"50%", background:"radial-gradient(circle,rgba(139,92,246,0.06) 0%,transparent 65%)", pointerEvents:"none", zIndex:0 }} />
+      <div style={{ position:"fixed", bottom:"10%", right:"-20%", width:300, height:300, borderRadius:"50%", background:"radial-gradient(circle,rgba(91,141,238,0.04) 0%,transparent 65%)", pointerEvents:"none", zIndex:0 }} />
+
+      {/* Content */}
+      <div style={{ position:"relative", zIndex:1 }}>
+        {renderTab()}
+      </div>
+
+      <BottomNav active={tab} onChange={setTab} />
+    </div>
+  );
+}
