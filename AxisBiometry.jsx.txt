@@ -1,0 +1,852 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ─── PPG SIGNAL PROCESSOR ────────────────────────────────────────────────────
+// Photoplethysmography via webcam — extrai BPM e HRV do canal verde dos frames
+
+class PPGProcessor {
+  private samples:    number[] = [];
+  private timestamps: number[] = [];
+  private peaks:      number[] = [];
+  private readonly WINDOW_MS    = 10000; // 10s de janela deslizante
+  private readonly MIN_PEAK_GAP = 350;   // ms mínimo entre batimentos (~170 BPM max)
+  private readonly MAX_PEAK_GAP = 2000;  // ms máximo (~30 BPM min)
+  private readonly SAMPLE_RATE  = 30;    // fps alvo
+
+  // Filtro passa-banda simples (0.7–4 Hz = 42–240 BPM)
+  private filterBuffer: number[] = [];
+  private readonly FILTER_LEN = 5;
+
+  addSample(greenValue: number, timestamp: number): void {
+    this.samples.push(greenValue);
+    this.timestamps.push(timestamp);
+
+    // Janela deslizante
+    const cutoff = timestamp - this.WINDOW_MS;
+    while (this.timestamps[0] < cutoff) {
+      this.samples.shift();
+      this.timestamps.shift();
+    }
+
+    this.filterBuffer.push(greenValue);
+    if (this.filterBuffer.length > this.FILTER_LEN) this.filterBuffer.shift();
+  }
+
+  // Moving average smoothing
+  private smooth(data: number[], window: number): number[] {
+    const result: number[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const start = Math.max(0, i - Math.floor(window / 2));
+      const end   = Math.min(data.length, i + Math.ceil(window / 2));
+      const slice = data.slice(start, end);
+      result.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+    }
+    return result;
+  }
+
+  // Detecção de picos
+  private detectPeaks(data: number[], timestamps: number[]): number[] {
+    const smoothed  = this.smooth(data, 5);
+    const mean      = smoothed.reduce((a, b) => a + b, 0) / smoothed.length;
+    const std       = Math.sqrt(smoothed.reduce((a, b) => a + (b - mean) ** 2, 0) / smoothed.length);
+    const threshold = mean + std * 0.3;
+
+    const peaks: number[] = [];
+    let lastPeak = -Infinity;
+
+    for (let i = 2; i < smoothed.length - 2; i++) {
+      if (
+        smoothed[i] > threshold &&
+        smoothed[i] > smoothed[i - 1] &&
+        smoothed[i] > smoothed[i - 2] &&
+        smoothed[i] > smoothed[i + 1] &&
+        smoothed[i] > smoothed[i + 2] &&
+        timestamps[i] - lastPeak > this.MIN_PEAK_GAP
+      ) {
+        peaks.push(timestamps[i]);
+        lastPeak = timestamps[i];
+      }
+    }
+    return peaks;
+  }
+
+  // RR intervals → BPM
+  getBPM(): number | null {
+    if (this.samples.length < 30) return null;
+    const peaks = this.detectPeaks(this.samples, this.timestamps);
+    if (peaks.length < 2) return null;
+
+    const rr: number[] = [];
+    for (let i = 1; i < peaks.length; i++) {
+      const interval = peaks[i] - peaks[i - 1];
+      if (interval >= this.MIN_PEAK_GAP && interval <= this.MAX_PEAK_GAP) {
+        rr.push(interval);
+      }
+    }
+    if (rr.length === 0) return null;
+
+    const meanRR = rr.reduce((a, b) => a + b, 0) / rr.length;
+    return Math.round(60000 / meanRR);
+  }
+
+  // RMSSD — Root Mean Square of Successive Differences
+  getRMSSD(): number | null {
+    if (this.samples.length < 60) return null;
+    const peaks = this.detectPeaks(this.samples, this.timestamps);
+    if (peaks.length < 3) return null;
+
+    const rr: number[] = [];
+    for (let i = 1; i < peaks.length; i++) {
+      const interval = peaks[i] - peaks[i - 1];
+      if (interval >= this.MIN_PEAK_GAP && interval <= this.MAX_PEAK_GAP) {
+        rr.push(interval);
+      }
+    }
+    if (rr.length < 2) return null;
+
+    const diffs = rr.slice(1).map((v, i) => (v - rr[i]) ** 2);
+    const rmssd = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / diffs.length);
+    return Math.round(rmssd);
+  }
+
+  // Stress index (0–100) baseado no HRV
+  getStressIndex(rmssd: number | null, bpm: number | null): number | null {
+    if (!rmssd || !bpm) return null;
+    // Baixo HRV + alto BPM = alto estresse
+    const hrvScore  = Math.max(0, Math.min(100, (rmssd / 80) * 100));
+    const bpmScore  = Math.max(0, Math.min(100, ((bpm - 50) / 80) * 100));
+    const stress    = Math.round((100 - hrvScore * 0.6 + bpmScore * 0.4));
+    return Math.max(0, Math.min(100, stress));
+  }
+
+  // Índice de coerência cardíaca (0–100)
+  getCoherence(rmssd: number | null): number | null {
+    if (!rmssd) return null;
+    // RMSSD > 50ms = boa coerência
+    const coh = Math.round(Math.min(99, (rmssd / 70) * 100));
+    return Math.max(10, coh);
+  }
+
+  // Sinal normalizado para visualização (últimas N amostras)
+  getNormalizedSignal(count: number): { value: number; ts: number }[] {
+    const n = Math.min(count, this.samples.length);
+    if (n === 0) return [];
+
+    const slice = this.samples.slice(-n);
+    const tsSlice = this.timestamps.slice(-n);
+    const min = Math.min(...slice);
+    const max = Math.max(...slice);
+    const range = max - min || 1;
+
+    return slice.map((v, i) => ({
+      value: (v - min) / range,
+      ts: tsSlice[i],
+    }));
+  }
+
+  getSampleCount(): number {
+    return this.samples.length;
+  }
+
+  reset(): void {
+    this.samples = [];
+    this.timestamps = [];
+    this.peaks = [];
+    this.filterBuffer = [];
+  }
+}
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
+const C = {
+  bg:      "#040608",
+  bg1:     "#070c10",
+  bg2:     "#0a1118",
+  bg3:     "#0f1820",
+  cyan:    "#00e5cc",
+  cyanDim: "rgba(0,229,204,0.5)",
+  cyanFaint:"rgba(0,229,204,0.1)",
+  green:   "#39ff6e",
+  red:     "#ff4455",
+  amber:   "#5b8dee",
+  white:   "rgba(220,240,235,0.9)",
+  whiteDim:"rgba(220,240,235,0.45)",
+  whiteFaint:"rgba(220,240,235,0.15)",
+  border:  "rgba(0,229,204,0.1)",
+  border2: "rgba(0,229,204,0.2)",
+  grid:    "rgba(0,229,204,0.04)",
+};
+
+const mono = "'Share Tech Mono', 'Courier New', monospace";
+const display = "'Orbitron', sans-serif";
+
+// ─── WAVEFORM CANVAS ─────────────────────────────────────────────────────────
+function WaveformCanvas({
+  signal,
+  width = 600,
+  height = 120,
+  color = C.cyan,
+  label = "PPG",
+  quality = "good",
+}: {
+  signal: { value: number; ts: number }[];
+  width?: number;
+  height?: number;
+  color?: string;
+  label?: string;
+  quality?: "good" | "poor" | "idle";
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = width  * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Background
+    ctx.fillStyle = C.bg1;
+    ctx.fillRect(0, 0, width, height);
+
+    // Grid lines
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < width; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+    }
+    for (let y = 0; y < height; y += 30) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+    }
+
+    // Center line
+    ctx.strokeStyle = `${color}22`;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (signal.length < 2) {
+      // Flat line when idle
+      ctx.strokeStyle = `${color}33`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke();
+      return;
+    }
+
+    // Waveform gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, `${color}88`);
+    grad.addColorStop(0.5, color);
+    grad.addColorStop(1, `${color}22`);
+
+    // Glow effect
+    ctx.shadowColor = color;
+    ctx.shadowBlur = quality === "good" ? 8 : 2;
+
+    ctx.strokeStyle = quality === "good" ? color : quality === "poor" ? C.amber : `${color}44`;
+    ctx.lineWidth = quality === "good" ? 1.8 : 1;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    signal.forEach((pt, i) => {
+      const x = (i / (signal.length - 1)) * width;
+      const y = height - pt.value * height * 0.8 - height * 0.1;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill under curve
+    ctx.shadowBlur = 0;
+    const fillGrad = ctx.createLinearGradient(0, 0, 0, height);
+    fillGrad.addColorStop(0, `${color}18`);
+    fillGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = fillGrad;
+    ctx.lineTo(width, height); ctx.lineTo(0, height); ctx.closePath();
+    ctx.fill();
+
+    // Label
+    ctx.font = `10px ${mono}`;
+    ctx.fillStyle = `${color}66`;
+    ctx.fillText(label, 8, 14);
+
+  }, [signal, width, height, color, quality]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width, height, display:"block", borderRadius:4 }}
+    />
+  );
+}
+
+// ─── METRIC DISPLAY ───────────────────────────────────────────────────────────
+function MetricDisplay({
+  label, value, unit, color = C.cyan,
+  size = "lg", trend, quality = "good",
+}: {
+  label: string;
+  value: number | string | null;
+  unit: string;
+  color?: string;
+  size?: "sm" | "md" | "lg" | "xl";
+  trend?: "up" | "down" | "stable";
+  quality?: "good" | "calculating" | "poor";
+}) {
+  const sizes = { sm:18, md:26, lg:40, xl:56 };
+  const fs = sizes[size];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+      {/* Value */}
+      <div style={{ position:"relative", display:"flex", alignItems:"baseline", gap:4 }}>
+        <span style={{
+          fontFamily: display, fontSize: fs, color,
+          lineHeight: 1, letterSpacing: "0.05em",
+          opacity: quality === "calculating" ? 0.4 : 1,
+          transition: "all 0.3s",
+          textShadow: quality === "good" ? `0 0 20px ${color}66` : "none",
+        }}>
+          {value === null ? "—" : value}
+        </span>
+        <span style={{ fontFamily:mono, fontSize:fs*0.35, color:`${color}88`, lineHeight:1 }}>
+          {unit}
+        </span>
+        {trend && (
+          <span style={{ fontSize:10, color:trend==="up"?C.green:trend==="down"?C.red:C.amber, position:"absolute", top:-6, right:-14 }}>
+            {trend==="up"?"▲":trend==="down"?"▼":"●"}
+          </span>
+        )}
+      </div>
+
+      {/* Bar */}
+      {typeof value === "number" && value !== null && (
+        <div style={{ width:48, height:2, background:"rgba(255,255,255,0.06)", borderRadius:1, overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${Math.min(100, (value/200)*100)}%`, background:color, transition:"width 0.5s ease" }} />
+        </div>
+      )}
+
+      {/* Label */}
+      <span style={{ fontFamily:mono, fontSize:9, color:`${color}66`, letterSpacing:"0.14em", textTransform:"uppercase" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─── QUALITY INDICATOR ────────────────────────────────────────────────────────
+function SignalQuality({ quality, samples }: { quality: "good"|"poor"|"idle"; samples: number }) {
+  const bars = [0.3, 0.5, 0.7, 1.0];
+  const active = quality === "good" ? 4 : quality === "poor" ? 2 : 0;
+  const color = quality === "good" ? C.green : quality === "poor" ? C.amber : C.whiteFaint;
+
+  return (
+    <div style={{ display:"flex", alignItems:"flex-end", gap:2 }}>
+      {bars.map((h, i) => (
+        <div key={i} style={{
+          width: 4,
+          height: 16 * h,
+          background: i < active ? color : "rgba(255,255,255,0.08)",
+          borderRadius: 1,
+          transition: "all 0.3s",
+          boxShadow: i < active ? `0 0 4px ${color}88` : "none",
+        }} />
+      ))}
+      <span style={{ fontFamily:mono, fontSize:9, color:`${color}88`, marginLeft:6, letterSpacing:"0.1em" }}>
+        {quality === "good" ? "BOA" : quality === "poor" ? "FRACA" : "—"}
+      </span>
+      {samples > 0 && (
+        <span style={{ fontFamily:mono, fontSize:9, color:C.whiteFaint, marginLeft:8 }}>
+          {samples}px
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+export default function AxisBiometry() {
+  const videoRef     = useRef<HTMLVideoElement>(null);
+  const canvasRef    = useRef<HTMLCanvasElement>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const processorRef = useRef(new PPGProcessor());
+  const rafRef       = useRef<number>(0);
+  const roiRef       = useRef<HTMLCanvasElement | null>(null);
+
+  const [state, setState] = useState<"idle"|"requesting"|"active"|"error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Métricas
+  const [bpm,       setBpm]       = useState<number|null>(null);
+  const [hrv,       setHrv]       = useState<number|null>(null);
+  const [stress,    setStress]    = useState<number|null>(null);
+  const [coherence, setCoherence] = useState<number|null>(null);
+
+  // Sinal PPG para waveform
+  const [ppgSignal,  setPpgSignal]  = useState<{value:number;ts:number}[]>([]);
+  const [quality,    setQuality]    = useState<"good"|"poor"|"idle">("idle");
+  const [sampleCount,setSampleCount]= useState(0);
+
+  // Histórico de BPM para trend
+  const bpmHistory = useRef<number[]>([]);
+  const [bpmTrend, setBpmTrend] = useState<"up"|"down"|"stable">("stable");
+
+  // Timer de sessão
+  const [elapsed, setElapsed] = useState(0);
+  const startTime = useRef<number>(0);
+
+  // Log de eventos
+  const [log, setLog] = useState<{ts:string;msg:string;type:string}[]>([]);
+  const addLog = useCallback((msg:string, type="info") => {
+    const ts = new Date().toLocaleTimeString("pt-BR");
+    setLog(p => [{ts,msg,type},...p].slice(0,20));
+  },[]);
+
+  // Captura frames da webcam e extrai canal verde (PPG)
+  const processFrame = useCallback(() => {
+    const video  = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) {
+      rafRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const ctx = canvas.getContext("2d", { willReadFrequently:true });
+    if (!ctx) return;
+
+    // ROI: centro do frame (testa/pulso colocado aqui)
+    const roiW = 80, roiH = 80;
+    const roiX = Math.floor((video.videoWidth  - roiW) / 2);
+    const roiY = Math.floor((video.videoHeight - roiH) / 2);
+
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    // Extrai pixels da ROI
+    const imageData = ctx.getImageData(roiX, roiY, roiW, roiH);
+    const data = imageData.data;
+
+    let sumR = 0, sumG = 0, sumB = 0, n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      sumR += data[i];
+      sumG += data[i+1];
+      sumB += data[i+2];
+      n++;
+    }
+
+    const avgG = sumG / n;
+    const avgR = sumR / n;
+
+    // Qualidade do sinal: dedão/testa deve ter R alto e G médio
+    const signalQuality: "good"|"poor"|"idle" =
+      avgR > 100 && avgG > 40 && avgG < 200 ? "good" :
+      avgR > 60  ? "poor" : "idle";
+
+    setQuality(signalQuality);
+
+    // Alimenta processador
+    processorRef.current.addSample(avgG, performance.now());
+
+    const count = processorRef.current.getSampleCount();
+    setSampleCount(count);
+
+    // Calcula métricas a cada 30 frames (~1s)
+    if (count % 15 === 0 && count > 30) {
+      const newBpm  = processorRef.current.getBPM();
+      const newHrv  = processorRef.current.getRMSSD();
+      const newStr  = processorRef.current.getStressIndex(newHrv, newBpm);
+      const newCoh  = processorRef.current.getCoherence(newHrv);
+
+      if (newBpm && newBpm >= 40 && newBpm <= 180) {
+        setBpm(prev => {
+          // Suavização: média com valor anterior
+          const smoothed = prev ? Math.round(prev * 0.7 + newBpm * 0.3) : newBpm;
+          bpmHistory.current.push(smoothed);
+          if (bpmHistory.current.length > 10) bpmHistory.current.shift();
+          if (bpmHistory.current.length >= 3) {
+            const last3 = bpmHistory.current.slice(-3);
+            const diff  = last3[2] - last3[0];
+            setBpmTrend(diff > 2 ? "up" : diff < -2 ? "down" : "stable");
+          }
+          return smoothed;
+        });
+      }
+      if (newHrv)  setHrv(newHrv);
+      if (newStr !== null) setStress(newStr);
+      if (newCoh !== null) setCoherence(newCoh);
+    }
+
+    // Atualiza waveform (últimos 150 samples)
+    setPpgSignal(processorRef.current.getNormalizedSignal(150));
+
+    // Timer
+    setElapsed(Math.floor((performance.now() - startTime.current) / 1000));
+
+    rafRef.current = requestAnimationFrame(processFrame);
+  }, []);
+
+  const startCapture = useCallback(async () => {
+    setState("requesting");
+    addLog("Solicitando acesso à câmera...", "info");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal:640 },
+          height: { ideal:480 },
+          facingMode: "user",
+          frameRate: { ideal:30 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      processorRef.current.reset();
+      startTime.current = performance.now();
+      setState("active");
+      addLog("Câmera ativa. Posicione o dedo ou testa na ROI.", "success");
+      rafRef.current = requestAnimationFrame(processFrame);
+    } catch(err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      setErrorMsg(msg);
+      setState("error");
+      addLog(`Erro: ${msg}`, "error");
+    }
+  }, [processFrame, addLog]);
+
+  const stopCapture = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setState("idle");
+    addLog("Captura encerrada.", "info");
+  }, [addLog]);
+
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+  }, []);
+
+  const fmt = (s:number) =>
+    `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+
+  const LOG_COLORS: Record<string,string> = {
+    info: C.cyanDim, success: C.green, error: C.red, warn: C.amber,
+  };
+
+  // Classificação HRV
+  const hrvClass = hrv === null ? null :
+    hrv >= 50 ? { label:"EXCELENTE", color:C.green } :
+    hrv >= 30 ? { label:"NORMAL",    color:C.cyan  } :
+    hrv >= 20 ? { label:"REDUZIDO",  color:C.amber } :
+               { label:"BAIXO",      color:C.red   };
+
+  // Classificação stress
+  const stressClass = stress === null ? null :
+    stress <= 30 ? { label:"BAIXO",   color:C.green } :
+    stress <= 60 ? { label:"MODERADO",color:C.amber } :
+                  { label:"ELEVADO",  color:C.red   };
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, color:C.white, fontFamily:mono }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:${C.bg}; }
+        ::-webkit-scrollbar { width:4px; }
+        ::-webkit-scrollbar-thumb { background:${C.border2}; }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+        @keyframes scan { from{transform:translateY(-100%)}to{transform:translateY(100%)} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
+      `}</style>
+
+      {/* Scanlines */}
+      <div style={{ position:"fixed", inset:0, backgroundImage:`repeating-linear-gradient(0deg,transparent,transparent 2px,${C.grid} 2px,${C.grid} 4px)`, pointerEvents:"none", zIndex:999 }} />
+
+      {/* Grid background */}
+      <div style={{ position:"fixed", inset:0, backgroundImage:`linear-gradient(${C.grid} 1px,transparent 1px),linear-gradient(90deg,${C.grid} 1px,transparent 1px)`, backgroundSize:"40px 40px", pointerEvents:"none" }} />
+
+      {/* Ambient glow */}
+      <div style={{ position:"fixed", top:"20%", left:"50%", transform:"translateX(-50%)", width:600, height:400, borderRadius:"50%", background:`radial-gradient(ellipse,rgba(0,229,204,0.04) 0%,transparent 70%)`, pointerEvents:"none" }} />
+
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px 40px", position:"relative", zIndex:1 }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+              <span style={{ fontFamily:display, fontSize:11, color:C.cyan, letterSpacing:"0.25em" }}>AXIS CORE™</span>
+              <span style={{ fontFamily:mono, fontSize:9, color:C.cyanDim, background:C.cyanFaint, border:`1px solid ${C.border}`, padding:"2px 8px", letterSpacing:"0.1em" }}>
+                BIOMETRIA PPG v1.0
+              </span>
+            </div>
+            <h1 style={{ fontFamily:display, fontSize:22, color:C.white, letterSpacing:"0.06em", lineHeight:1 }}>
+              HRV via Webcam
+            </h1>
+          </div>
+
+          <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+            {state === "active" && (
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontFamily:display, fontSize:20, color:C.cyan }}>{fmt(elapsed)}</div>
+                <div style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.1em" }}>DURAÇÃO</div>
+              </div>
+            )}
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:
+                state==="active"?C.green:state==="requesting"?C.amber:state==="error"?C.red:C.whiteFaint,
+                boxShadow:state==="active"?`0 0 10px ${C.green}`:"none",
+                animation:state==="active"?"pulse 2s ease infinite":"none",
+              }} />
+              <span style={{ fontSize:10, color:C.whiteDim, letterSpacing:"0.12em" }}>
+                {state==="active"?"CAPTURANDO":state==="requesting"?"AGUARDANDO":state==="error"?"ERRO":"INATIVO"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Main grid */}
+        <div style={{ display:"grid", gridTemplateColumns:"340px 1fr", gap:16 }}>
+
+          {/* Left — camera + controls */}
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+
+            {/* Camera feed */}
+            <div style={{ position:"relative", background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden", aspectRatio:"4/3" }}>
+              <video ref={videoRef} muted playsInline style={{ width:"100%", height:"100%", objectFit:"cover", display:state==="active"?"block":"none", transform:"scaleX(-1)" }} />
+
+              {/* Hidden processing canvas */}
+              <canvas ref={canvasRef} style={{ display:"none" }} />
+
+              {/* ROI overlay */}
+              {state === "active" && (
+                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none" }}>
+                  <div style={{
+                    width:80, height:80,
+                    border:`1.5px solid ${quality==="good"?C.green:quality==="poor"?C.amber:C.cyanDim}`,
+                    borderRadius:4,
+                    boxShadow:`0 0 16px ${quality==="good"?C.green+"44":C.cyanFaint}`,
+                    transition:"all 0.4s",
+                    position:"relative",
+                  }}>
+                    {/* Corner marks */}
+                    {[[0,0],[0,1],[1,0],[1,1]].map(([t,l],i)=>(
+                      <div key={i} style={{ position:"absolute", width:10, height:10,
+                        top:t?undefined:"-1px", bottom:t?"-1px":undefined,
+                        left:l?undefined:"-1px", right:l?"-1px":undefined,
+                        borderTop:t?"none":`2px solid ${C.cyan}`,
+                        borderBottom:t?`2px solid ${C.cyan}`:"none",
+                        borderLeft:l?"none":`2px solid ${C.cyan}`,
+                        borderRight:l?`2px solid ${C.cyan}`:"none",
+                      }} />
+                    ))}
+                    <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <span style={{ fontSize:8, color:`${C.cyan}88`, letterSpacing:"0.1em", textAlign:"center", lineHeight:1.4 }}>
+                        ROI<br/>COLOQUE<br/>DEDO
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Scan line */}
+                  {quality === "good" && (
+                    <div style={{ position:"absolute", left:0, right:0, height:1, background:`linear-gradient(to right,transparent,${C.green}66,transparent)`, animation:"scan 2s linear infinite" }} />
+                  )}
+                </div>
+              )}
+
+              {/* Idle state */}
+              {state !== "active" && (
+                <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12 }}>
+                  <div style={{ fontSize:36, color:C.cyanFaint }}>◎</div>
+                  <span style={{ fontSize:11, color:C.whiteFaint, letterSpacing:"0.1em", textAlign:"center", lineHeight:1.6 }}>
+                    {state === "error" ? errorMsg : "CÂMERA INATIVA\nClique em INICIAR"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Signal quality */}
+            <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:9, color:C.whiteFaint, letterSpacing:"0.12em" }}>QUALIDADE DO SINAL</span>
+              <SignalQuality quality={quality} samples={sampleCount} />
+            </div>
+
+            {/* Controls */}
+            <div style={{ display:"flex", gap:8 }}>
+              {state !== "active" ? (
+                <button onClick={startCapture} disabled={state==="requesting"} style={{
+                  flex:1, padding:"12px", background:C.cyanFaint, border:`1px solid ${C.border2}`,
+                  color:C.cyan, fontFamily:mono, fontSize:12, letterSpacing:"0.1em",
+                  cursor:state==="requesting"?"not-allowed":"pointer", borderRadius:6,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                  transition:"all 0.2s",
+                }}>
+                  {state === "requesting" ? "AGUARDANDO..." : "▶ INICIAR CAPTURA"}
+                </button>
+              ) : (
+                <button onClick={stopCapture} style={{
+                  flex:1, padding:"12px", background:"rgba(255,68,85,0.1)", border:"1px solid rgba(255,68,85,0.3)",
+                  color:C.red, fontFamily:mono, fontSize:12, letterSpacing:"0.1em",
+                  cursor:"pointer", borderRadius:6, transition:"all 0.2s",
+                }}>
+                  ⏹ ENCERRAR
+                </button>
+              )}
+              {state === "active" && (
+                <button onClick={()=>{processorRef.current.reset();addLog("Buffer limpo.","info");}} style={{
+                  padding:"12px 16px", background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}`,
+                  color:C.whiteDim, fontFamily:mono, fontSize:11, cursor:"pointer", borderRadius:6,
+                }}>
+                  ↺
+                </button>
+              )}
+            </div>
+
+            {/* Instructions */}
+            <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"12px 14px" }}>
+              <div style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.12em", marginBottom:8 }}>INSTRUÇÕES</div>
+              {[
+                "1. Clique em INICIAR CAPTURA",
+                "2. Permita acesso à câmera",
+                "3. Coloque o dedo indicador sobre a câmera",
+                "   OU aproxime a testa da ROI",
+                "4. Segure firme por 10-15 segundos",
+                "5. Aguarde estabilização do sinal",
+              ].map((l,i)=>(
+                <div key={i} style={{ fontSize:10, color:i<2?C.white:C.whiteFaint, lineHeight:1.8 }}>{l}</div>
+              ))}
+              <div style={{ marginTop:8, padding:"6px 8px", background:"rgba(255,184,32,0.06)", border:"1px solid rgba(255,184,32,0.15)", borderRadius:4 }}>
+                <span style={{ fontSize:9, color:C.amber, letterSpacing:"0.08em" }}>
+                  ⚠ Ferramenta educacional. Não é dispositivo médico certificado.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — metrics + waveform */}
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+
+            {/* Primary metrics */}
+            <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"20px 24px" }}>
+              <div style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.14em", marginBottom:18 }}>MÉTRICAS EM TEMPO REAL</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:20 }}>
+                <MetricDisplay label="BPM" value={bpm} unit="bpm" color={C.red} size="xl" trend={bpmTrend}
+                  quality={bpm?"good":state==="active"?"calculating":"poor"} />
+                <MetricDisplay label="HRV RMSSD" value={hrv} unit="ms" color={C.cyan} size="xl"
+                  quality={hrv?"good":state==="active"?"calculating":"poor"} />
+                <MetricDisplay label="COERÊNCIA" value={coherence} unit="%" color={C.green} size="xl"
+                  quality={coherence?"good":state==="active"?"calculating":"poor"} />
+                <MetricDisplay label="STRESS" value={stress} unit="%" color={C.amber} size="xl"
+                  quality={stress!==null?"good":state==="active"?"calculating":"poor"} />
+              </div>
+            </div>
+
+            {/* Waveform */}
+            <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 16px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <span style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.14em" }}>SINAL PPG — WAVEFORM</span>
+                <div style={{ display:"flex", gap:6 }}>
+                  {state === "active" && (
+                    <span style={{ fontSize:9, color:quality==="good"?C.green:C.amber, background:quality==="good"?"rgba(57,255,110,0.08)":"rgba(91,141,238,0.08)", border:`1px solid ${quality==="good"?C.green+"33":C.amber+"33"}`, padding:"2px 8px", letterSpacing:"0.08em" }}>
+                      {quality==="good"?"● LIVE":"◌ CALIBRATING"}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <WaveformCanvas
+                signal={ppgSignal}
+                width={680}
+                height={110}
+                color={C.cyan}
+                label="GREEN CHANNEL · PPG"
+                quality={quality}
+              />
+            </div>
+
+            {/* HRV analysis */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 16px" }}>
+                <div style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.14em", marginBottom:12 }}>ANÁLISE HRV</div>
+                {hrvClass ? (
+                  <div>
+                    <div style={{ fontFamily:display, fontSize:13, color:hrvClass.color, marginBottom:6, letterSpacing:"0.1em" }}>
+                      {hrvClass.label}
+                    </div>
+                    <div style={{ height:3, background:"rgba(255,255,255,0.06)", marginBottom:8 }}>
+                      <div style={{ height:"100%", width:`${Math.min(100,(hrv||0)/80*100)}%`, background:hrvClass.color, transition:"width 0.5s" }} />
+                    </div>
+                    <div style={{ fontSize:10, color:C.whiteFaint, lineHeight:1.7 }}>
+                      {(hrv||0)>=50?"Campo cardíaco bem equilibrado.":(hrv||0)>=30?"HRV dentro do normal para o contexto.":"HRV reduzido. Considere técnicas de respiração."}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize:10, color:C.whiteFaint }}>
+                    {state==="active"?"Coletando dados...":"Inicie a captura."}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 16px" }}>
+                <div style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.14em", marginBottom:12 }}>ÍNDICE DE ESTRESSE</div>
+                {stressClass ? (
+                  <div>
+                    <div style={{ fontFamily:display, fontSize:13, color:stressClass.color, marginBottom:6, letterSpacing:"0.1em" }}>
+                      {stressClass.label}
+                    </div>
+                    <div style={{ height:3, background:"rgba(255,255,255,0.06)", marginBottom:8 }}>
+                      <div style={{ height:"100%", width:`${stress||0}%`, background:stressClass.color, transition:"width 0.5s" }} />
+                    </div>
+                    <div style={{ fontSize:10, color:C.whiteFaint, lineHeight:1.7 }}>
+                      {(stress||0)<=30?"Sistema nervoso autônomo equilibrado.":(stress||0)<=60?"Nível moderado. Respiração consciente recomendada.":"Considere técnicas de relaxamento."}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize:10, color:C.whiteFaint }}>
+                    {state==="active"?"Coletando dados...":"Inicie a captura."}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Event log */}
+            <div style={{ background:C.bg1, border:`1px solid ${C.border}`, borderRadius:8, padding:"12px 14px", flex:1 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <span style={{ fontSize:9, color:C.cyanDim, letterSpacing:"0.14em" }}>LOG DE EVENTOS</span>
+                <button onClick={()=>setLog([])} style={{ fontSize:9, color:C.whiteFaint, background:"transparent", border:"none", cursor:"pointer", fontFamily:mono, letterSpacing:"0.08em" }}>
+                  LIMPAR
+                </button>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:2, maxHeight:130, overflowY:"auto" }}>
+                {log.length === 0 && (
+                  <span style={{ fontSize:10, color:C.whiteFaint }}>Nenhum evento.</span>
+                )}
+                {log.map((l,i)=>(
+                  <div key={i} style={{ display:"flex", gap:10, fontSize:10, padding:"2px 0", borderBottom:`1px solid ${C.border}`, animation:`fadeIn 0.3s ease` }}>
+                    <span style={{ color:C.whiteFaint, flexShrink:0, width:52 }}>{l.ts}</span>
+                    <span style={{ color:LOG_COLORS[l.type]||C.whiteDim }}>{l.msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop:20, paddingTop:14, borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontSize:9, color:C.whiteFaint, letterSpacing:"0.1em" }}>
+            AXIS CORE™ · PPG BIOMETRY · Algoritmo RMSSD + Peak Detection
+          </span>
+          <span style={{ fontSize:9, color:C.whiteFaint, letterSpacing:"0.08em", maxWidth:480, textAlign:"right", lineHeight:1.5 }}>
+            Ferramenta educacional e de bem-estar. Não é dispositivo médico certificado.
+            Não substitui equipamentos clínicos ou acompanhamento profissional.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
