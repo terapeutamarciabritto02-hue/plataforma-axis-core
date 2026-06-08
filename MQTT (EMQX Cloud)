@@ -1,0 +1,5 @@
+ Acesse [emqx.com/cloud](https://www.emqx.com/en/cloud)
+ Crie cluster gratuito (Serverless)
+ Crie credenciais: `axis_core` / `sua-senha`
+Anote: Host, Port (8883 TLS), Username, Password
+ Atualize variáveis MQTT no backend
