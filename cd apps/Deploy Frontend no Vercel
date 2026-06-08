@@ -1,0 +1,8 @@
+cd apps/frontend
+npx vercel --prod
+
+# Ou conecte o repositório GitHub ao Vercel:
+# vercel.com → Import Git Repository
+# Framework: Next.js
+# Root Directory: apps/frontend
+# Adicione as env vars
