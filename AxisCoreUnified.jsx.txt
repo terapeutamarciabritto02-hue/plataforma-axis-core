@@ -6,8 +6,9 @@ export const useAuth = () => useContext(AuthContext);
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 // CONFIGURE: substitua pelos seus valores
-const SUPABASE_URL  = (typeof window !== "undefined" && window.ENV_SUPABASE_URL)  || "https://SEU-PROJETO.supabase.co";
-const SUPABASE_ANON = (typeof window !== "undefined" && window.ENV_SUPABASE_ANON) || "SUA-ANON-KEY";
+const SUPABASE_URL  = (typeof window !== "undefined" && window.ENV_SUPABASE_URL)  || "https://oikylekfpmjpvqibigfw.supabase.co";
+const SUPABASE_ANON = (typeof window !== "undefined" && window.ENV_SUPABASE_ANON) || "ANON-KEY=sb_publishable_1lwUe6IrfqTGGWginSiWdg_UBg5eKKT;"
+
 
 async function sbFetch(path, opts = {}) {
   const token = localStorage.getItem("axis_token");
