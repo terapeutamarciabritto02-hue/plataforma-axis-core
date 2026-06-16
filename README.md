@@ -82,8 +82,8 @@ npm install
 
 Crie o arquivo `.env.local`:
 ```bash
-EXPO_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON=SUA-ANON-KEY
+EXPO_PUBLIC_SUPABASE_URL=EXPO_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON=sb_publishable_1lwUe6IrfqTGGWginSiWdg_UBg5eKKT
 ```
 
 ### 3. Rodar em desenvolvimento
